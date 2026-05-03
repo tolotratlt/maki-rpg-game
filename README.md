@@ -1,17 +1,17 @@
 # Captain Clown Nose RPG
 
-Petit prototype RPG 2D pixel construit avec `@tialops/maki`.
+A small 2D pixel RPG prototype built with `@tialops/maki`.
 
-## Lancer le jeu
+## Run the game
 
 ```bash
 npm install
 npm run dev
 ```
 
-Puis ouvrir `http://127.0.0.1:5173/` si Vite ne l'ouvre pas automatiquement.
+If Vite does not open the browser automatically, open `http://127.0.0.1:5173/`.
 
-## Structure
+## Project structure
 
 ```text
 assets/
@@ -22,18 +22,6 @@ maki.config.js
 vite.config.js
 ```
 
-## Contrôles
+## Controls
 
-- `Flèches` : déplacer Captain Clown Nose
-
-## Outils locaux
-
-```bash
-npm run prepare:demo
-```
-
-Cette commande régénère :
-
-- `assets/sprites/captain-clown-nose.png`
-- `assets/rooms/room1.png`
-- `assets/maps/default_map.json`
+- `Arrow keys`: move Captain Clown Nose
