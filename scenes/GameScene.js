@@ -18,6 +18,10 @@ export default class GameScene extends Scene {
         super.preload()
 
         this.captain = this.maki.player('captain')
+        this.load.spritesheet('captain-idle', 'sprites/captain-clown-idle.png', {
+            frameWidth: makiConfig.player.frameWidth,
+            frameHeight: makiConfig.player.frameHeight
+        })
         manager.map(this, 'default_map')
         manager.preload(this)
     }
@@ -39,6 +43,8 @@ export default class GameScene extends Scene {
         this.captain.sprite.body.setOffset(20, 18)
 
         this.captain.keys = this.createMergedMovementKeys()
+        this.createIdleAnimations()
+        this.captain.sprite.play('captain-idle-right')
 
         this.physics.add.collider(
             this.captain.sprite,
@@ -110,7 +116,7 @@ export default class GameScene extends Scene {
         sprite.setVelocity(0)
 
         if (horizontal === 0 && vertical === 0) {
-            sprite.anims.stop()
+            sprite.anims.play(`captain-idle-${this.lastHorizontalDirection}`, true)
             return
         }
 
@@ -131,6 +137,26 @@ export default class GameScene extends Scene {
 
         if (vertical !== 0) {
             sprite.anims.play(`captain-${this.lastHorizontalDirection}`, true)
+        }
+    }
+
+    createIdleAnimations() {
+        if (!this.anims.exists('captain-idle-right')) {
+            this.anims.create({
+                key: 'captain-idle-right',
+                frames: this.anims.generateFrameNumbers('captain-idle', { start: 0, end: 4 }),
+                frameRate: 7,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('captain-idle-left')) {
+            this.anims.create({
+                key: 'captain-idle-left',
+                frames: this.anims.generateFrameNumbers('captain-idle', { start: 5, end: 9 }),
+                frameRate: 7,
+                repeat: -1
+            })
         }
     }
 }

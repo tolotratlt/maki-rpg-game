@@ -6,6 +6,7 @@ export default {
     debug: false,
     player: {
         file: 'captain-clown-nose.png',
+        idleFile: 'captain-clown-idle.png',
         layout: 'row',
         cols: 6,
         rows: 4,
