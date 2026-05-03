@@ -5,6 +5,10 @@ import makiConfig from '../maki.config.js'
 const TILE_SIZE = 32
 const MAP_WIDTH = 40
 const MAP_HEIGHT = 30
+const MUSIC_BPM = 137.986
+const SECONDS_PER_BEAT = 60 / MUSIC_BPM
+const MOVE_FRAME_RATE = 6 / SECONDS_PER_BEAT
+const IDLE_FRAME_RATE = 5 / SECONDS_PER_BEAT
 
 export default class GameScene extends Scene {
     constructor() {
@@ -45,6 +49,7 @@ export default class GameScene extends Scene {
         this.captain.sprite.body.setOffset(20, 18)
 
         this.captain.keys = this.createMergedMovementKeys()
+        this.configureMoveAnimationTempo()
         this.createIdleAnimations()
         this.captain.sprite.play('captain-idle-right')
         this.setupBackgroundMusic()
@@ -148,7 +153,7 @@ export default class GameScene extends Scene {
             this.anims.create({
                 key: 'captain-idle-right',
                 frames: this.anims.generateFrameNumbers('captain-idle', { start: 0, end: 4 }),
-                frameRate: 7,
+                frameRate: IDLE_FRAME_RATE,
                 repeat: -1
             })
         }
@@ -157,10 +162,32 @@ export default class GameScene extends Scene {
             this.anims.create({
                 key: 'captain-idle-left',
                 frames: this.anims.generateFrameNumbers('captain-idle', { start: 5, end: 9 }),
-                frameRate: 7,
+                frameRate: IDLE_FRAME_RATE,
                 repeat: -1
             })
         }
+    }
+
+    configureMoveAnimationTempo() {
+        const moveAnimations = [
+            { key: 'captain-right', start: 0, end: 5 },
+            { key: 'captain-up', start: 6, end: 11 },
+            { key: 'captain-left', start: 12, end: 17 },
+            { key: 'captain-down', start: 18, end: 23 }
+        ]
+
+        moveAnimations.forEach(({ key, start, end }) => {
+            if (this.anims.exists(key)) {
+                this.anims.remove(key)
+            }
+
+            this.anims.create({
+                key,
+                frames: this.anims.generateFrameNumbers('captain', { start, end }),
+                frameRate: MOVE_FRAME_RATE,
+                repeat: -1
+            })
+        })
     }
 
     setupBackgroundMusic() {
