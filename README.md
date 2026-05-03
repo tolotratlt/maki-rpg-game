@@ -25,3 +25,7 @@ vite.config.js
 ## Controls
 
 - `Arrow keys`: move Captain Clown Nose
+
+## Asset source
+
+The character art used in this project comes from the free asset pack [Treasure Hunters](https://pixelfrog-assets.itch.io/treasure-hunters) by Pixel Frog.
