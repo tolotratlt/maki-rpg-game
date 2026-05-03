@@ -6,6 +6,7 @@
   "main": "game.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "maki:dev": "maki dev",
     "watch": "vite --host 127.0.0.1 --open",
     "build": "vite build",
     "preview": "vite preview"

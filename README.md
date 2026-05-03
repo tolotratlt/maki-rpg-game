@@ -7,6 +7,7 @@ A small 2D pixel RPG prototype built with `@tialops/maki`.
 ```bash
 npm install
 npm run dev
+npx maki dev
 ```
 
 If Vite does not open the browser automatically, open `http://127.0.0.1:5173/`.
@@ -28,6 +29,7 @@ vite.config.js
 ## Controls
 
 - `Arrow keys`: move Captain Clown Nose
+- `Space`: spawn a bomb
 
 ## Asset source
 
