@@ -13,7 +13,7 @@ const BOMB_FRAME_WIDTH = 96
 const BOMB_FRAME_HEIGHT = 108
 const BOMB_TICK_FRAME_RATE = 10 / SECONDS_PER_BEAT
 const BOMB_EXPLOSION_FRAME_RATE = 9 / SECONDS_PER_BEAT
-const BOMB_OFF_DELAY_MS = SECONDS_PER_BEAT * 500
+const BOMB_FUSE_BEATS = [1, 2, 3]
 const BOMB_DROP_COOLDOWN_MS = SECONDS_PER_BEAT * 250
 
 export default class GameScene extends Scene {
@@ -244,13 +244,15 @@ export default class GameScene extends Scene {
     dropBomb() {
         const worldX = Phaser.Math.Snap.To(this.captain.sprite.x, TILE_SIZE)
         const worldY = Phaser.Math.Snap.To(this.captain.sprite.y, TILE_SIZE)
+        const fuseBeats = Phaser.Utils.Array.GetRandom(BOMB_FUSE_BEATS)
+        const offDelayMs = Math.max(0, fuseBeats - 1) * SECONDS_PER_BEAT * 1000
         const bomb = this.add.sprite(worldX, worldY + 10, 'pirate-bomb', 0)
 
         bomb.setScale(0.5)
         bomb.setDepth(worldY + 12)
         this.bombs.add(bomb)
 
-        this.time.delayedCall(BOMB_OFF_DELAY_MS, () => {
+        this.time.delayedCall(offDelayMs, () => {
             if (!bomb.active) {
                 return
             }
