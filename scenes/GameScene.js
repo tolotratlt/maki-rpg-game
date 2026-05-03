@@ -9,6 +9,7 @@ const MAP_HEIGHT = 30
 export default class GameScene extends Scene {
     constructor() {
         super('GameScene')
+        this.backgroundMusic = null
         this.captain = null
         this.hud = null
         this.lastHorizontalDirection = 'right'
@@ -22,6 +23,7 @@ export default class GameScene extends Scene {
             frameWidth: makiConfig.player.frameWidth,
             frameHeight: makiConfig.player.frameHeight
         })
+        this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
     }
@@ -45,6 +47,7 @@ export default class GameScene extends Scene {
         this.captain.keys = this.createMergedMovementKeys()
         this.createIdleAnimations()
         this.captain.sprite.play('captain-idle-right')
+        this.setupBackgroundMusic()
 
         this.physics.add.collider(
             this.captain.sprite,
@@ -158,5 +161,33 @@ export default class GameScene extends Scene {
                 repeat: -1
             })
         }
+    }
+
+    setupBackgroundMusic() {
+        this.backgroundMusic = this.sound.add('battle-theme', {
+            loop: true,
+            volume: 0.35
+        })
+
+        const startMusic = () => {
+            if (!this.backgroundMusic?.isPlaying) {
+                this.backgroundMusic.play()
+            }
+        }
+
+        const startMusicFromKeyboard = () => {
+            startMusic()
+            window.removeEventListener('keydown', startMusicFromKeyboard, true)
+        }
+
+        this.input.once('pointerdown', startMusic)
+        this.input.keyboard.once('keydown', startMusic)
+        window.addEventListener('keydown', startMusicFromKeyboard, true)
+        this.events.once('shutdown', () => {
+            if (this.backgroundMusic?.isPlaying) {
+                this.backgroundMusic.stop()
+            }
+            window.removeEventListener('keydown', startMusicFromKeyboard, true)
+        })
     }
 }
