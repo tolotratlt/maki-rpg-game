@@ -11,6 +11,7 @@ export default class GameScene extends Scene {
         super('GameScene')
         this.captain = null
         this.hud = null
+        this.lastHorizontalDirection = 'right'
     }
 
     preload() {
@@ -59,11 +60,11 @@ export default class GameScene extends Scene {
     }
 
     update() {
-        this.maki.move(this.captain)
-
         if (!this.captain?.sprite) {
             return
         }
+
+        this.moveCaptain()
 
         const { x, y } = this.captain.sprite
         this.hud.setText([
@@ -99,5 +100,39 @@ export default class GameScene extends Scene {
             up: createKeyState(cursors.up, wasd.W, wasd.Z),
             down: createKeyState(cursors.down, wasd.S)
         }
+    }
+
+    moveCaptain() {
+        const { sprite, keys, speed } = this.captain
+
+        sprite.setVelocity(0)
+
+        if (keys.left.isDown) {
+            this.lastHorizontalDirection = 'left'
+            sprite.setVelocityX(-speed)
+            sprite.anims.play('captain-left', true)
+            return
+        }
+
+        if (keys.right.isDown) {
+            this.lastHorizontalDirection = 'right'
+            sprite.setVelocityX(speed)
+            sprite.anims.play('captain-right', true)
+            return
+        }
+
+        if (keys.up.isDown) {
+            sprite.setVelocityY(-speed)
+            sprite.anims.play(`captain-${this.lastHorizontalDirection}`, true)
+            return
+        }
+
+        if (keys.down.isDown) {
+            sprite.setVelocityY(speed)
+            sprite.anims.play(`captain-${this.lastHorizontalDirection}`, true)
+            return
+        }
+
+        sprite.anims.stop()
     }
 }
