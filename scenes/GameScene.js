@@ -9,14 +9,23 @@ const MUSIC_BPM = 137.986
 const SECONDS_PER_BEAT = 60 / MUSIC_BPM
 const MOVE_FRAME_RATE = 6 / SECONDS_PER_BEAT
 const IDLE_FRAME_RATE = 5 / SECONDS_PER_BEAT
+const BOMB_FRAME_WIDTH = 96
+const BOMB_FRAME_HEIGHT = 108
+const BOMB_TICK_FRAME_RATE = 10 / SECONDS_PER_BEAT
+const BOMB_EXPLOSION_FRAME_RATE = 9 / SECONDS_PER_BEAT
+const BOMB_OFF_DELAY_MS = SECONDS_PER_BEAT * 500
+const BOMB_DROP_COOLDOWN_MS = SECONDS_PER_BEAT * 250
 
 export default class GameScene extends Scene {
     constructor() {
         super('GameScene')
         this.backgroundMusic = null
+        this.bombs = null
         this.captain = null
         this.hud = null
         this.lastHorizontalDirection = 'right'
+        this.lastBombDropAt = 0
+        this.spaceKey = null
     }
 
     preload() {
@@ -26,6 +35,10 @@ export default class GameScene extends Scene {
         this.load.spritesheet('captain-idle', 'sprites/captain-clown-idle.png', {
             frameWidth: makiConfig.player.frameWidth,
             frameHeight: makiConfig.player.frameHeight
+        })
+        this.load.spritesheet('pirate-bomb', 'sprites/pirate-bomb-spritesheet.png', {
+            frameWidth: BOMB_FRAME_WIDTH,
+            frameHeight: BOMB_FRAME_HEIGHT
         })
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         manager.map(this, 'default_map')
@@ -49,8 +62,11 @@ export default class GameScene extends Scene {
         this.captain.sprite.body.setOffset(20, 18)
 
         this.captain.keys = this.createMergedMovementKeys()
+        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+        this.bombs = this.add.group()
         this.configureMoveAnimationTempo()
         this.createIdleAnimations()
+        this.createBombAnimations()
         this.captain.sprite.play('captain-idle-right')
         this.setupBackgroundMusic()
 
@@ -79,11 +95,12 @@ export default class GameScene extends Scene {
         }
 
         this.moveCaptain()
+        this.handleBombInput()
 
         const { x, y } = this.captain.sprite
         this.hud.setText([
             'Captain Clown Nose',
-            'Fleches ou WASD/ZQSD',
+            'Fleches ou WASD/ZQSD, Espace',
             `Position: ${Math.round(x)}, ${Math.round(y)}`
         ])
     }
@@ -148,6 +165,20 @@ export default class GameScene extends Scene {
         }
     }
 
+    handleBombInput() {
+        if (!this.spaceKey || !Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+            return
+        }
+
+        const now = this.time.now
+        if (now - this.lastBombDropAt < BOMB_DROP_COOLDOWN_MS) {
+            return
+        }
+
+        this.lastBombDropAt = now
+        this.dropBomb()
+    }
+
     createIdleAnimations() {
         if (!this.anims.exists('captain-idle-right')) {
             this.anims.create({
@@ -186,6 +217,54 @@ export default class GameScene extends Scene {
                 frames: this.anims.generateFrameNumbers('captain', { start, end }),
                 frameRate: MOVE_FRAME_RATE,
                 repeat: -1
+            })
+        })
+    }
+
+    createBombAnimations() {
+        if (!this.anims.exists('pirate-bomb-ticking')) {
+            this.anims.create({
+                key: 'pirate-bomb-ticking',
+                frames: this.anims.generateFrameNumbers('pirate-bomb', { start: 1, end: 10 }),
+                frameRate: BOMB_TICK_FRAME_RATE,
+                repeat: 0
+            })
+        }
+
+        if (!this.anims.exists('pirate-bomb-explosion')) {
+            this.anims.create({
+                key: 'pirate-bomb-explosion',
+                frames: this.anims.generateFrameNumbers('pirate-bomb', { start: 11, end: 19 }),
+                frameRate: BOMB_EXPLOSION_FRAME_RATE,
+                repeat: 0
+            })
+        }
+    }
+
+    dropBomb() {
+        const worldX = Phaser.Math.Snap.To(this.captain.sprite.x, TILE_SIZE)
+        const worldY = Phaser.Math.Snap.To(this.captain.sprite.y, TILE_SIZE)
+        const bomb = this.add.sprite(worldX, worldY + 10, 'pirate-bomb', 0)
+
+        bomb.setScale(0.5)
+        bomb.setDepth(worldY + 12)
+        this.bombs.add(bomb)
+
+        this.time.delayedCall(BOMB_OFF_DELAY_MS, () => {
+            if (!bomb.active) {
+                return
+            }
+
+            bomb.play('pirate-bomb-ticking')
+            bomb.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+                if (!bomb.active) {
+                    return
+                }
+
+                bomb.play('pirate-bomb-explosion')
+                bomb.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+                    this.bombs.remove(bomb, true, true)
+                })
             })
         })
     }
