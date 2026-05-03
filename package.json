@@ -5,7 +5,8 @@
   "private": true,
   "main": "game.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 127.0.0.1",
+    "watch": "vite --host 127.0.0.1 --open",
     "build": "vite build",
     "preview": "vite preview"
   },

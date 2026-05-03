@@ -104,35 +104,33 @@ export default class GameScene extends Scene {
 
     moveCaptain() {
         const { sprite, keys, speed } = this.captain
+        const horizontal = (keys.right.isDown ? 1 : 0) - (keys.left.isDown ? 1 : 0)
+        const vertical = (keys.down.isDown ? 1 : 0) - (keys.up.isDown ? 1 : 0)
 
         sprite.setVelocity(0)
 
-        if (keys.left.isDown) {
+        if (horizontal === 0 && vertical === 0) {
+            sprite.anims.stop()
+            return
+        }
+
+        const direction = new Phaser.Math.Vector2(horizontal, vertical).normalize().scale(speed)
+        sprite.setVelocity(direction.x, direction.y)
+
+        if (horizontal < 0) {
             this.lastHorizontalDirection = 'left'
-            sprite.setVelocityX(-speed)
             sprite.anims.play('captain-left', true)
             return
         }
 
-        if (keys.right.isDown) {
+        if (horizontal > 0) {
             this.lastHorizontalDirection = 'right'
-            sprite.setVelocityX(speed)
             sprite.anims.play('captain-right', true)
             return
         }
 
-        if (keys.up.isDown) {
-            sprite.setVelocityY(-speed)
+        if (vertical !== 0) {
             sprite.anims.play(`captain-${this.lastHorizontalDirection}`, true)
-            return
         }
-
-        if (keys.down.isDown) {
-            sprite.setVelocityY(speed)
-            sprite.anims.play(`captain-${this.lastHorizontalDirection}`, true)
-            return
-        }
-
-        sprite.anims.stop()
     }
 }
