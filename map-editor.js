@@ -15,6 +15,7 @@ const mapWidthInput = document.getElementById('map-width')
 const mapHeightInput = document.getElementById('map-height')
 const tileSizeInput = document.getElementById('tile-size')
 const brushSizeInput = document.getElementById('brush-size')
+const singleTileRepeatInput = document.getElementById('single-tile-repeat')
 const modeButtons = {
     paint: document.getElementById('mode-paint'),
     erase: document.getElementById('mode-erase'),
@@ -38,6 +39,7 @@ const state = {
     showGrid: true,
     mode: 'paint',
     brushSize: 1,
+    repeatSingleTile: false,
     selectedTile: 1,
     hoverCell: null,
     tilesetImage: null,
@@ -149,6 +151,7 @@ function syncInputs() {
     mapHeightInput.value = String(state.mapHeight)
     tileSizeInput.value = String(state.tileSize)
     brushSizeInput.value = String(state.brushSize)
+    singleTileRepeatInput.checked = state.repeatSingleTile
     tilesetSelect.value = state.tilesetPath
     mapSelect.value = state.availableMaps.includes(state.mapName) ? state.mapName : ''
     Object.entries(modeButtons).forEach(([mode, button]) => {
@@ -219,6 +222,10 @@ function getSelectedBrushTileOrigin() {
 }
 
 function getSelectedBrushDimensions() {
+    if (state.repeatSingleTile) {
+        return { width: 1, height: 1 }
+    }
+
     const origin = getSelectedBrushTileOrigin()
 
     return {
@@ -230,8 +237,8 @@ function getSelectedBrushDimensions() {
 function getBrushTileIdAtOffset(offsetCol, offsetRow) {
     const origin = getSelectedBrushTileOrigin()
     const dimensions = getSelectedBrushDimensions()
-    const brushCol = origin.col + (offsetCol % dimensions.width)
-    const brushRow = origin.row + (offsetRow % dimensions.height)
+    const brushCol = state.repeatSingleTile ? origin.col : origin.col + (offsetCol % dimensions.width)
+    const brushRow = state.repeatSingleTile ? origin.row : origin.row + (offsetRow % dimensions.height)
 
     return brushRow * state.tilesetColumns + brushCol + 1
 }
@@ -693,6 +700,12 @@ function bindEvents() {
     document.getElementById('brush-inc').addEventListener('click', () => setBrushSize(state.brushSize + 1))
     document.getElementById('brush-dec').addEventListener('click', () => setBrushSize(state.brushSize - 1))
     brushSizeInput.addEventListener('change', () => setBrushSize(brushSizeInput.value))
+    singleTileRepeatInput.addEventListener('change', () => {
+        state.repeatSingleTile = singleTileRepeatInput.checked
+        syncInputs()
+        renderTileset()
+        renderMap()
+    })
 
     tilesetSelect.addEventListener('change', async () => {
         state.tilesetPath = tilesetSelect.value

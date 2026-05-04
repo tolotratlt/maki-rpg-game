@@ -145,11 +145,28 @@
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+      align-items: center;
     }
 
     #brush-controls button,
     #mode-controls button {
       min-width: 90px;
+    }
+
+    .checkbox-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .checkbox-control input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--accent);
     }
 
     #mode-controls {
@@ -285,6 +302,10 @@
             <button id="brush-dec" class="secondary" type="button">Brush -</button>
             <input id="brush-size" type="number" min="1" max="12" value="1">
             <button id="brush-inc" class="secondary" type="button">Brush +</button>
+            <label class="checkbox-control" for="single-tile-repeat">
+              <input id="single-tile-repeat" type="checkbox">
+              Repeat single tile
+            </label>
           </div>
         </div>
         <div id="tileset-scroll">
