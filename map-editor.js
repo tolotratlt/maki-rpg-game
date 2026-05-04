@@ -16,6 +16,7 @@ const mapHeightInput = document.getElementById('map-height')
 const tileSizeInput = document.getElementById('tile-size')
 const brushSizeInput = document.getElementById('brush-size')
 const singleTileRepeatInput = document.getElementById('single-tile-repeat')
+const undoMapButton = document.getElementById('undo-map')
 const modeButtons = {
     paint: document.getElementById('mode-paint'),
     erase: document.getElementById('mode-erase'),
@@ -42,6 +43,7 @@ const state = {
     repeatSingleTile: false,
     selectedTile: 1,
     hoverCell: null,
+    undoStack: [],
     tilesetImage: null,
     tilesetColumns: 0,
     tilesetRows: 0,
@@ -52,8 +54,11 @@ const state = {
     panStartX: 0,
     panStartY: 0,
     panScrollLeft: 0,
-    panScrollTop: 0
+    panScrollTop: 0,
+    hasPendingUndoSnapshot: false
 }
+
+const MAX_UNDO_STATES = 40
 
 function setStatus(message) {
     statusNode.textContent = message
@@ -158,6 +163,7 @@ function syncInputs() {
         button.classList.toggle('active', state.mode === mode)
     })
     gridButton.classList.toggle('active', state.showGrid)
+    undoMapButton.disabled = state.undoStack.length === 0
 }
 
 function updateDocumentTitle() {
@@ -195,6 +201,60 @@ function setZoom(nextZoom, anchor) {
     }
 
     renderMap()
+}
+
+function cloneMatrix(matrix) {
+    return matrix.map(row => [...row])
+}
+
+function createUndoSnapshot() {
+    return {
+        mapName: state.mapName,
+        tilesetPath: state.tilesetPath,
+        tileSize: state.tileSize,
+        mapWidth: state.mapWidth,
+        mapHeight: state.mapHeight,
+        floor: cloneMatrix(state.floor),
+        collision: cloneMatrix(state.collision),
+        furniture: Array.isArray(state.furniture)
+            ? state.furniture.map(item => ({ ...item }))
+            : []
+    }
+}
+
+function pushUndoSnapshot() {
+    state.undoStack.push(createUndoSnapshot())
+
+    if (state.undoStack.length > MAX_UNDO_STATES) {
+        state.undoStack.shift()
+    }
+
+    syncInputs()
+}
+
+async function undoMapChange() {
+    const snapshot = state.undoStack.pop()
+
+    if (!snapshot) {
+        syncInputs()
+        return
+    }
+
+    state.mapName = snapshot.mapName
+    state.tilesetPath = snapshot.tilesetPath
+    state.tileSize = snapshot.tileSize
+    state.mapWidth = snapshot.mapWidth
+    state.mapHeight = snapshot.mapHeight
+    state.floor = cloneMatrix(snapshot.floor)
+    state.collision = cloneMatrix(snapshot.collision)
+    state.furniture = snapshot.furniture.map(item => ({ ...item }))
+    state.hoverCell = null
+    state.hasPendingUndoSnapshot = false
+
+    await applyTileset(state.tilesetPath)
+    syncInputs()
+    updateDocumentTitle()
+    setStatus(`Undo restored ${state.mapName}`)
 }
 
 function getTileSourceRect(tileId) {
@@ -464,6 +524,8 @@ async function loadMap(name) {
     state.collision = normalizeCollisionGrid(payload.collisions, state.mapWidth, state.mapHeight, state.tileSize)
     state.furniture = Array.isArray(payload.layers?.furniture) ? payload.layers.furniture : []
     state.hoverCell = null
+    state.undoStack = []
+    state.hasPendingUndoSnapshot = false
     await applyTileset(state.tilesetPath)
     syncInputs()
     updateDocumentTitle()
@@ -471,6 +533,7 @@ async function loadMap(name) {
 }
 
 function createNewMap() {
+    pushUndoSnapshot()
     state.mapName = mapNameInput.value.trim() || 'new_map'
     state.mapWidth = Math.max(1, Number(mapWidthInput.value) || 1)
     state.mapHeight = Math.max(1, Number(mapHeightInput.value) || 1)
@@ -487,6 +550,7 @@ function createNewMap() {
 }
 
 function resizeMap() {
+    pushUndoSnapshot()
     const nextWidth = Math.max(1, Number(mapWidthInput.value) || 1)
     const nextHeight = Math.max(1, Number(mapHeightInput.value) || 1)
     const resizedFloor = createFloorGrid(nextWidth, nextHeight, 0)
@@ -606,6 +670,15 @@ function applyBrush(cell, options = {}) {
     renderMap()
 }
 
+function beginMapMutation() {
+    if (state.hasPendingUndoSnapshot || state.mode === 'picker') {
+        return
+    }
+
+    pushUndoSnapshot()
+    state.hasPendingUndoSnapshot = true
+}
+
 function shouldPan(event) {
     return event.button === 1 || (event.button === 0 && event.shiftKey) || (event.button === 0 && event.code === 'Space')
 }
@@ -676,6 +749,9 @@ function bindEvents() {
 
     document.getElementById('new-map').addEventListener('click', createNewMap)
     document.getElementById('resize-map').addEventListener('click', resizeMap)
+    undoMapButton.addEventListener('click', async () => {
+        await undoMapChange()
+    })
     document.getElementById('save-map').addEventListener('click', async () => {
         try {
             await saveMap()
@@ -714,6 +790,7 @@ function bindEvents() {
     })
 
     tileSizeInput.addEventListener('change', async () => {
+        pushUndoSnapshot()
         state.tileSize = Math.max(8, Number(tileSizeInput.value) || 32)
         state.floor = normalizeFloorGrid(state.floor, state.mapWidth, state.mapHeight)
         state.collision = normalizeCollisionGrid(collisionGridToRects(state.collision, state.tileSize), state.mapWidth, state.mapHeight, state.tileSize)
@@ -745,6 +822,7 @@ function bindEvents() {
         const cell = mapCellFromEvent(event)
         state.hoverCell = cell
         state.isPainting = true
+        beginMapMutation()
         applyBrush(cell, { eraseCollision: event.button === 2 })
     })
 
@@ -766,8 +844,16 @@ function bindEvents() {
     window.addEventListener('mousemove', handlePointerMove)
     window.addEventListener('mouseup', () => {
         state.isPainting = false
+        state.hasPendingUndoSnapshot = false
         stopPan()
         endResize()
+    })
+
+    window.addEventListener('keydown', async event => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+            event.preventDefault()
+            await undoMapChange()
+        }
     })
 }
 

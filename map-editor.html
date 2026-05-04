@@ -70,7 +70,7 @@
 
     #toolbar {
       display: grid;
-      grid-template-columns: repeat(6, max-content) 1fr;
+      grid-template-columns: minmax(180px, 0.9fr) minmax(180px, 0.9fr) minmax(220px, 1.1fr) minmax(300px, 340px) max-content max-content 1fr;
       gap: 10px;
       align-items: end;
       padding: 12px;
@@ -99,6 +99,30 @@
 
     .control.inline > * {
       margin: 0;
+    }
+
+    .control select,
+    .control input[type="text"] {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .map-size-group {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(88px, 1fr));
+      gap: 10px;
+      align-items: end;
+      width: 100%;
+    }
+
+    .map-size-group input {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .view-controls {
+      min-width: 190px;
+      justify-content: flex-start;
     }
 
     #status {
@@ -263,7 +287,7 @@
       </div>
       <div class="control">
         <label for="map-width">Map Size</label>
-        <div class="control inline">
+        <div class="map-size-group">
           <input id="map-width" type="number" min="1" value="40">
           <input id="map-height" type="number" min="1" value="30">
           <input id="tile-size" type="number" min="8" step="8" value="32">
@@ -274,12 +298,13 @@
         <div class="control inline">
           <button id="new-map" type="button">New</button>
           <button id="resize-map" class="secondary" type="button">Resize</button>
+          <button id="undo-map" class="secondary" type="button">Undo</button>
           <button id="save-map" type="button">Save</button>
         </div>
       </div>
       <div class="control">
         <label>View</label>
-        <div class="control inline">
+        <div class="control inline view-controls">
           <button id="toggle-grid" class="active" type="button">Grid</button>
           <button id="zoom-out" class="secondary" type="button">-</button>
           <button id="zoom-in" class="secondary" type="button">+</button>
