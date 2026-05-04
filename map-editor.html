@@ -199,6 +199,59 @@
       gap: 8px;
     }
 
+    #object-controls {
+      display: none;
+      gap: 8px;
+    }
+
+    #object-controls.active {
+      display: grid;
+    }
+
+    #object-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+      gap: 8px;
+      max-height: 220px;
+      overflow: auto;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-3);
+    }
+
+    .object-card {
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      cursor: pointer;
+      min-width: 0;
+    }
+
+    .object-card.active {
+      border-color: var(--accent);
+      background: rgba(155, 226, 87, 0.12);
+    }
+
+    .object-card img {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+
+    .object-card span {
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
     #tileset-scroll {
       overflow: auto;
       padding: 12px;
@@ -321,6 +374,7 @@
             <button id="mode-paint" class="active" type="button">Paint</button>
             <button id="mode-erase" type="button">Erase</button>
             <button id="mode-collision" type="button">Collision</button>
+            <button id="mode-object" type="button">Furniture/Object</button>
             <button id="mode-picker" type="button">Pick Tile</button>
           </div>
           <div id="brush-controls">
@@ -331,6 +385,10 @@
               <input id="single-tile-repeat" type="checkbox">
               Repeat single tile
             </label>
+          </div>
+          <div id="object-controls">
+            <div class="panel-title">Furniture Assets</div>
+            <div id="object-grid"></div>
           </div>
         </div>
         <div id="tileset-scroll">

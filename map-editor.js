@@ -17,10 +17,13 @@ const tileSizeInput = document.getElementById('tile-size')
 const brushSizeInput = document.getElementById('brush-size')
 const singleTileRepeatInput = document.getElementById('single-tile-repeat')
 const undoMapButton = document.getElementById('undo-map')
+const objectControls = document.getElementById('object-controls')
+const objectGrid = document.getElementById('object-grid')
 const modeButtons = {
     paint: document.getElementById('mode-paint'),
     erase: document.getElementById('mode-erase'),
     collision: document.getElementById('mode-collision'),
+    object: document.getElementById('mode-object'),
     picker: document.getElementById('mode-picker')
 }
 const gridButton = document.getElementById('toggle-grid')
@@ -28,6 +31,7 @@ const gridButton = document.getElementById('toggle-grid')
 const state = {
     availableMaps: [],
     availableTilesets: [],
+    availableFurnitureAssets: [],
     mapName: 'default_map',
     tilesetPath: '',
     tileSize: 32,
@@ -36,12 +40,14 @@ const state = {
     floor: [],
     collision: [],
     furniture: [],
+    furnitureImages: new Map(),
     zoom: 1.5,
     showGrid: true,
     mode: 'paint',
     brushSize: 1,
     repeatSingleTile: false,
     selectedTile: 1,
+    selectedFurnitureAsset: '',
     hoverCell: null,
     undoStack: [],
     tilesetImage: null,
@@ -130,6 +136,15 @@ function collisionGridToRects(grid, tileSize) {
     return rects
 }
 
+function getFurnitureBounds(item) {
+    return {
+        left: item.x,
+        top: item.y,
+        right: item.x + item.w,
+        bottom: item.y + item.h
+    }
+}
+
 async function fetchJson(url, options) {
     const response = await fetch(url, options)
 
@@ -164,6 +179,7 @@ function syncInputs() {
     })
     gridButton.classList.toggle('active', state.showGrid)
     undoMapButton.disabled = state.undoStack.length === 0
+    objectControls.classList.toggle('active', state.mode === 'object')
 }
 
 function updateDocumentTitle() {
@@ -173,6 +189,7 @@ function updateDocumentTitle() {
 function setMode(mode) {
     state.mode = mode
     syncInputs()
+    renderMap()
 }
 
 function setBrushSize(nextSize) {
@@ -422,6 +439,22 @@ function renderMap() {
         }
     }
 
+    for (const item of state.furniture) {
+        const image = state.furnitureImages.get(item.src)
+
+        if (!image) {
+            continue
+        }
+
+        mapContext.drawImage(
+            image,
+            item.x * state.zoom,
+            item.y * state.zoom,
+            item.w * state.zoom,
+            item.h * state.zoom
+        )
+    }
+
     for (let row = 0; row < state.mapHeight; row += 1) {
         for (let col = 0; col < state.mapWidth; col += 1) {
             if (state.collision[row][col]) {
@@ -453,7 +486,7 @@ function renderMap() {
     }
 
     if (state.hoverCell) {
-        const previewSize = state.brushSize * scaledTileSize
+        const previewSize = state.mode === 'object' ? scaledTileSize : state.brushSize * scaledTileSize
         mapContext.strokeStyle = state.mode === 'collision' ? '#ff7d66' : '#9be257'
         mapContext.lineWidth = 2
         mapContext.strokeRect(
@@ -483,6 +516,61 @@ async function applyTileset(path) {
     renderMap()
 }
 
+function ensureFurnitureImage(src) {
+    if (state.furnitureImages.has(src)) {
+        return Promise.resolve(state.furnitureImages.get(src))
+    }
+
+    return new Promise((resolve, reject) => {
+        const image = new Image()
+        image.onload = () => {
+            state.furnitureImages.set(src, image)
+            resolve(image)
+        }
+        image.onerror = () => reject(new Error(`Failed to load furniture asset: ${src}`))
+        image.src = `/${src.replace(/^assets\//, '')}?t=${Date.now()}`
+    })
+}
+
+async function preloadFurnitureImages() {
+    const sources = new Set([
+        ...state.availableFurnitureAssets,
+        ...state.furniture.map(item => item.src)
+    ])
+
+    await Promise.all([...sources].map(async src => {
+        try {
+            await ensureFurnitureImage(src)
+        } catch {
+            return null
+        }
+        return null
+    }))
+}
+
+function renderObjectGrid() {
+    objectGrid.innerHTML = ''
+
+    for (const src of state.availableFurnitureAssets) {
+        const card = document.createElement('button')
+        card.type = 'button'
+        card.className = 'object-card'
+        card.classList.toggle('active', src === state.selectedFurnitureAsset)
+        const image = document.createElement('img')
+        image.src = `/${src.replace(/^assets\//, '')}`
+        const label = document.createElement('span')
+        label.textContent = src.split('/').pop()
+        card.appendChild(image)
+        card.appendChild(label)
+        card.addEventListener('click', () => {
+            state.selectedFurnitureAsset = src
+            renderObjectGrid()
+            setStatus(`Selected furniture asset ${label.textContent}`)
+        })
+        objectGrid.appendChild(card)
+    }
+}
+
 function populateSelect(select, values, placeholder = '') {
     select.innerHTML = ''
 
@@ -505,11 +593,16 @@ async function loadBootstrap() {
     const payload = await fetchJson(bootstrapUrl)
     state.availableMaps = payload.maps || []
     state.availableTilesets = payload.tilesets || []
+    state.availableFurnitureAssets = payload.furnitureAssets || []
     populateSelect(mapSelect, state.availableMaps, '')
     populateSelect(tilesetSelect, state.availableTilesets, '')
 
     if (!state.tilesetPath && state.availableTilesets.length > 0) {
         state.tilesetPath = state.availableTilesets[0]
+    }
+
+    if (!state.selectedFurnitureAsset && state.availableFurnitureAssets.length > 0) {
+        state.selectedFurnitureAsset = state.availableFurnitureAssets[0]
     }
 }
 
@@ -526,6 +619,7 @@ async function loadMap(name) {
     state.hoverCell = null
     state.undoStack = []
     state.hasPendingUndoSnapshot = false
+    await preloadFurnitureImages()
     await applyTileset(state.tilesetPath)
     syncInputs()
     updateDocumentTitle()
@@ -542,8 +636,10 @@ function createNewMap() {
     state.floor = createFloorGrid(state.mapWidth, state.mapHeight, 0)
     state.collision = createCollisionGrid(state.mapWidth, state.mapHeight)
     state.furniture = []
+    state.furnitureImages = new Map()
     state.hoverCell = null
     updateDocumentTitle()
+    preloadFurnitureImages()
     applyTileset(state.tilesetPath)
     syncInputs()
     setStatus(`Created new map ${state.mapName}`)
@@ -642,6 +738,23 @@ function tilesetCellFromEvent(event) {
     return { row, col }
 }
 
+function removeTopFurnitureAtCell(row, col) {
+    const worldX = col * state.tileSize + state.tileSize / 2
+    const worldY = row * state.tileSize + state.tileSize / 2
+
+    for (let index = state.furniture.length - 1; index >= 0; index -= 1) {
+        const item = state.furniture[index]
+        const bounds = getFurnitureBounds(item)
+
+        if (worldX >= bounds.left && worldX <= bounds.right && worldY >= bounds.top && worldY <= bounds.bottom) {
+            state.furniture.splice(index, 1)
+            return true
+        }
+    }
+
+    return false
+}
+
 function applyBrush(cell, options = {}) {
     if (!cell) {
         return
@@ -657,6 +770,24 @@ function applyBrush(cell, options = {}) {
                 state.floor[row][col] = 0
             } else if (state.mode === 'collision') {
                 state.collision[row][col] = !eraseCollision
+            } else if (state.mode === 'object') {
+                if (eraseCollision) {
+                    removeTopFurnitureAtCell(row, col)
+                } else {
+                    const image = state.furnitureImages.get(state.selectedFurnitureAsset)
+
+                    if (!image || !state.selectedFurnitureAsset) {
+                        continue
+                    }
+
+                    state.furniture.push({
+                        src: state.selectedFurnitureAsset,
+                        x: col * state.tileSize,
+                        y: row * state.tileSize,
+                        w: image.naturalWidth,
+                        h: image.naturalHeight
+                    })
+                }
             } else if (state.mode === 'picker') {
                 state.selectedTile = state.floor[row][col] || state.selectedTile
                 renderTileset()
@@ -860,6 +991,8 @@ function bindEvents() {
 async function init() {
     bindEvents()
     await loadBootstrap()
+    await preloadFurnitureImages()
+    renderObjectGrid()
 
     const params = new URLSearchParams(window.location.search)
     const requestedMap = params.get('map') || (state.availableMaps.includes('default_map') ? 'default_map' : state.availableMaps[0])

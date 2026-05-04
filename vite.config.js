@@ -5,6 +5,7 @@ import path from 'node:path'
 const workspaceRoot = process.cwd()
 const mapsDir = path.join(workspaceRoot, 'assets', 'maps')
 const roomsDir = path.join(workspaceRoot, 'assets', 'rooms')
+const spritesDir = path.join(workspaceRoot, 'assets', 'sprites')
 
 function json(res, status, payload) {
     res.statusCode = status
@@ -37,6 +38,40 @@ function parseMapName(url) {
     return mapName
 }
 
+async function collectImageAssets(rootDir, publicPrefix) {
+    const results = []
+
+    async function walk(currentDir) {
+        const entries = await fs.readdir(currentDir, { withFileTypes: true })
+
+        for (const entry of entries) {
+            const absolutePath = path.join(currentDir, entry.name)
+
+            if (entry.isDirectory()) {
+                await walk(absolutePath)
+                continue
+            }
+
+            if (!/\.(png|jpg|jpeg)$/i.test(entry.name)) {
+                continue
+            }
+
+            const relativePath = path.relative(rootDir, absolutePath).replaceAll('\\', '/')
+            results.push(`${publicPrefix}/${relativePath}`)
+        }
+    }
+
+    try {
+        await walk(rootDir)
+    } catch (error) {
+        if (!error || error.code !== 'ENOENT') {
+            throw error
+        }
+    }
+
+    return results.sort((left, right) => left.localeCompare(right))
+}
+
 function mapEditorApiPlugin() {
     return {
         name: 'map-editor-api',
@@ -50,9 +85,10 @@ function mapEditorApiPlugin() {
                 const url = new URL(req.url, 'http://127.0.0.1')
 
                 if (req.method === 'GET' && url.pathname === '/api/map-editor/bootstrap') {
-                    const [mapEntries, tilesetEntries] = await Promise.all([
+                    const [mapEntries, tilesetEntries, furnitureAssets] = await Promise.all([
                         fs.readdir(mapsDir, { withFileTypes: true }),
-                        fs.readdir(roomsDir, { withFileTypes: true })
+                        fs.readdir(roomsDir, { withFileTypes: true }),
+                        collectImageAssets(spritesDir, 'assets/sprites')
                     ])
 
                     const maps = mapEntries
@@ -65,7 +101,7 @@ function mapEditorApiPlugin() {
                         .map(entry => `assets/rooms/${entry.name}`)
                         .sort((left, right) => left.localeCompare(right))
 
-                    json(res, 200, { maps, tilesets })
+                    json(res, 200, { maps, tilesets, furnitureAssets })
                     return
                 }
 
