@@ -9,12 +9,14 @@ const MUSIC_BPM = 137.986
 const SECONDS_PER_BEAT = 60 / MUSIC_BPM
 const MOVE_FRAME_RATE = 6 / SECONDS_PER_BEAT
 const IDLE_FRAME_RATE = 5 / SECONDS_PER_BEAT
+const HIT_FRAME_RATE = 4 / SECONDS_PER_BEAT
 const BOMB_FRAME_WIDTH = 96
 const BOMB_FRAME_HEIGHT = 108
 const BOMB_TICK_FRAME_RATE = 10 / SECONDS_PER_BEAT
 const BOMB_EXPLOSION_FRAME_RATE = 9 / SECONDS_PER_BEAT
 const BOMB_FUSE_BEATS = [1, 2, 3]
 const BOMB_DROP_COOLDOWN_MS = SECONDS_PER_BEAT * 250
+const CAPTAIN_HIT_RADIUS = TILE_SIZE * 1.5
 
 export default class GameScene extends Scene {
     constructor() {
@@ -25,6 +27,7 @@ export default class GameScene extends Scene {
         this.hud = null
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
+        this.isCaptainHit = false
         this.spaceKey = null
     }
 
@@ -33,6 +36,10 @@ export default class GameScene extends Scene {
 
         this.captain = this.maki.player('captain')
         this.load.spritesheet('captain-idle', 'sprites/captain-clown-idle.png', {
+            frameWidth: makiConfig.player.frameWidth,
+            frameHeight: makiConfig.player.frameHeight
+        })
+        this.load.spritesheet('captain-hit', 'sprites/captain-clown-hit.png', {
             frameWidth: makiConfig.player.frameWidth,
             frameHeight: makiConfig.player.frameHeight
         })
@@ -66,6 +73,7 @@ export default class GameScene extends Scene {
         this.bombs = this.add.group()
         this.configureMoveAnimationTempo()
         this.createIdleAnimations()
+        this.createHitAnimation()
         this.createBombAnimations()
         this.captain.sprite.play('captain-idle-right')
         this.setupBackgroundMusic()
@@ -135,9 +143,16 @@ export default class GameScene extends Scene {
 
     moveCaptain() {
         const { sprite, keys, speed } = this.captain
+
+        if (this.isCaptainHit) {
+            sprite.setVelocity(0)
+            return
+        }
+
         const horizontal = (keys.right.isDown ? 1 : 0) - (keys.left.isDown ? 1 : 0)
         const vertical = (keys.down.isDown ? 1 : 0) - (keys.up.isDown ? 1 : 0)
 
+        sprite.setFlipX(false)
         sprite.setVelocity(0)
 
         if (horizontal === 0 && vertical === 0) {
@@ -195,6 +210,17 @@ export default class GameScene extends Scene {
                 frames: this.anims.generateFrameNumbers('captain-idle', { start: 5, end: 9 }),
                 frameRate: IDLE_FRAME_RATE,
                 repeat: -1
+            })
+        }
+    }
+
+    createHitAnimation() {
+        if (!this.anims.exists('captain-hit')) {
+            this.anims.create({
+                key: 'captain-hit',
+                frames: this.anims.generateFrameNumbers('captain-hit', { start: 0, end: 3 }),
+                frameRate: HIT_FRAME_RATE,
+                repeat: 0
             })
         }
     }
@@ -263,11 +289,43 @@ export default class GameScene extends Scene {
                     return
                 }
 
+                this.handleCaptainBombHit(bomb.x, bomb.y)
                 bomb.play('pirate-bomb-explosion')
                 bomb.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
                     this.bombs.remove(bomb, true, true)
                 })
             })
+        })
+    }
+
+    handleCaptainBombHit(explosionX, explosionY) {
+        if (this.isCaptainHit || !this.captain?.sprite) {
+            return
+        }
+
+        const distance = Phaser.Math.Distance.Between(
+            this.captain.sprite.x,
+            this.captain.sprite.y,
+            explosionX,
+            explosionY
+        )
+
+        if (distance > CAPTAIN_HIT_RADIUS) {
+            return
+        }
+
+        this.isCaptainHit = true
+        this.captain.sprite.setVelocity(0)
+        this.captain.sprite.setFlipX(this.lastHorizontalDirection === 'left')
+        this.captain.sprite.play('captain-hit', true)
+        this.captain.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, animation => {
+            if (animation.key !== 'captain-hit') {
+                return
+            }
+
+            this.isCaptainHit = false
+            this.captain.sprite.setFlipX(false)
+            this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
         })
     }
 
