@@ -169,6 +169,7 @@ function setMode(mode) {
 function setBrushSize(nextSize) {
     state.brushSize = clamp(Number(nextSize) || 1, 1, 12)
     syncInputs()
+    renderTileset()
     renderMap()
 }
 
@@ -204,29 +205,70 @@ function getTileSourceRect(tileId) {
     }
 }
 
+function getSelectedBrushTileOrigin() {
+    if (state.selectedTile <= 0) {
+        return { col: 0, row: 0 }
+    }
+
+    const zeroBased = state.selectedTile - 1
+
+    return {
+        col: zeroBased % state.tilesetColumns,
+        row: Math.floor(zeroBased / state.tilesetColumns)
+    }
+}
+
+function getSelectedBrushDimensions() {
+    const origin = getSelectedBrushTileOrigin()
+
+    return {
+        width: Math.max(1, Math.min(state.brushSize, state.tilesetColumns - origin.col)),
+        height: Math.max(1, Math.min(state.brushSize, state.tilesetRows - origin.row))
+    }
+}
+
+function getBrushTileIdAtOffset(offsetCol, offsetRow) {
+    const origin = getSelectedBrushTileOrigin()
+    const dimensions = getSelectedBrushDimensions()
+    const brushCol = origin.col + (offsetCol % dimensions.width)
+    const brushRow = origin.row + (offsetRow % dimensions.height)
+
+    return brushRow * state.tilesetColumns + brushCol + 1
+}
+
 function drawTilePreview() {
     if (!state.tilesetImage || state.selectedTile <= 0) {
         return
     }
 
-    const { sx, sy } = getTileSourceRect(state.selectedTile)
+    const origin = getSelectedBrushTileOrigin()
+    const dimensions = getSelectedBrushDimensions()
     const previewX = 8
-    const previewY = tilesetCanvas.height - state.tileSize * state.tilesetZoom - 8
-    const previewSize = state.tileSize * state.tilesetZoom
+    const previewWidth = dimensions.width * state.tileSize * state.tilesetZoom
+    const previewHeight = dimensions.height * state.tileSize * state.tilesetZoom
+    const previewY = tilesetCanvas.height - previewHeight - 8
 
     tilesetContext.fillStyle = 'rgba(0, 0, 0, 0.72)'
-    tilesetContext.fillRect(previewX - 4, previewY - 4, previewSize + 8, previewSize + 8)
-    tilesetContext.drawImage(
-        state.tilesetImage,
-        sx,
-        sy,
-        state.tileSize,
-        state.tileSize,
-        previewX,
-        previewY,
-        previewSize,
-        previewSize
-    )
+    tilesetContext.fillRect(previewX - 4, previewY - 4, previewWidth + 8, previewHeight + 8)
+
+    for (let row = 0; row < dimensions.height; row += 1) {
+        for (let col = 0; col < dimensions.width; col += 1) {
+            const tileId = getBrushTileIdAtOffset(col, row)
+            const { sx, sy } = getTileSourceRect(tileId)
+
+            tilesetContext.drawImage(
+                state.tilesetImage,
+                sx,
+                sy,
+                state.tileSize,
+                state.tileSize,
+                previewX + col * state.tileSize * state.tilesetZoom,
+                previewY + row * state.tileSize * state.tilesetZoom,
+                state.tileSize * state.tilesetZoom,
+                state.tileSize * state.tilesetZoom
+            )
+        }
+    }
 }
 
 function renderTileset() {
@@ -264,14 +306,15 @@ function renderTileset() {
     }
 
     if (state.selectedTile > 0) {
-        const { sx, sy } = getTileSourceRect(state.selectedTile)
+        const origin = getSelectedBrushTileOrigin()
+        const dimensions = getSelectedBrushDimensions()
         tilesetContext.strokeStyle = '#9be257'
         tilesetContext.lineWidth = 3
         tilesetContext.strokeRect(
-            sx * state.tilesetZoom + 1.5,
-            sy * state.tilesetZoom + 1.5,
-            state.tileSize * state.tilesetZoom - 3,
-            state.tileSize * state.tilesetZoom - 3
+            origin.col * state.tileSize * state.tilesetZoom + 1.5,
+            origin.row * state.tileSize * state.tilesetZoom + 1.5,
+            dimensions.width * state.tileSize * state.tilesetZoom - 3,
+            dimensions.height * state.tileSize * state.tilesetZoom - 3
         )
     }
 
@@ -538,7 +581,7 @@ function applyBrush(cell, options = {}) {
     for (let row = cell.row; row < Math.min(state.mapHeight, cell.row + state.brushSize); row += 1) {
         for (let col = cell.col; col < Math.min(state.mapWidth, cell.col + state.brushSize); col += 1) {
             if (state.mode === 'paint') {
-                state.floor[row][col] = state.selectedTile
+                state.floor[row][col] = getBrushTileIdAtOffset(col - cell.col, row - cell.row)
             } else if (state.mode === 'erase') {
                 state.floor[row][col] = 0
             } else if (state.mode === 'collision') {
@@ -552,6 +595,7 @@ function applyBrush(cell, options = {}) {
         }
     }
 
+    renderTileset()
     renderMap()
 }
 
@@ -673,7 +717,8 @@ function bindEvents() {
 
         state.selectedTile = cell.row * state.tilesetColumns + cell.col + 1
         renderTileset()
-        setStatus(`Selected tile ${state.selectedTile}`)
+        const dimensions = getSelectedBrushDimensions()
+        setStatus(`Selected tileset brush ${dimensions.width} x ${dimensions.height} from tile ${state.selectedTile}`)
     })
 
     mapCanvas.addEventListener('mousedown', event => {
