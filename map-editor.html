@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Captain Clown Nose Map Editor</title>
+  <style>
+    :root {
+      --bg: #10161f;
+      --panel: #182232;
+      --panel-2: #223149;
+      --panel-3: #0f1724;
+      --line: #2f4768;
+      --text: #edf4ff;
+      --muted: #9cb0ca;
+      --accent: #9be257;
+      --danger: #ff7d66;
+      --collision: rgba(255, 110, 110, 0.42);
+      --tileset-width: 360px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Courier New", monospace;
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    button, select, input[type="number"], input[type="text"] {
+      border: 1px solid var(--line);
+      background: var(--panel-3);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button.active {
+      background: #355e1b;
+      border-color: #7ccc37;
+    }
+
+    button.secondary {
+      background: var(--panel);
+    }
+
+    button.danger {
+      border-color: #6a2f2f;
+      color: #ffd5d0;
+    }
+
+    #app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100%;
+    }
+
+    #toolbar {
+      display: grid;
+      grid-template-columns: repeat(6, max-content) 1fr;
+      gap: 10px;
+      align-items: end;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #1b2a40 0%, #142032 100%);
+    }
+
+    .control {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .control label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .control.inline {
+      display: flex;
+      align-items: end;
+      gap: 8px;
+    }
+
+    .control.inline > * {
+      margin: 0;
+    }
+
+    #status {
+      align-self: center;
+      justify-self: end;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      max-width: 420px;
+    }
+
+    #workspace {
+      display: grid;
+      grid-template-columns: var(--tileset-width) 8px 1fr;
+      min-height: 0;
+    }
+
+    #tileset-panel {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-width: 240px;
+      max-width: 65vw;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+      display: grid;
+      gap: 10px;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    #brush-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #brush-controls button,
+    #mode-controls button {
+      min-width: 90px;
+    }
+
+    #mode-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #tileset-scroll {
+      overflow: auto;
+      padding: 12px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%),
+        var(--panel);
+    }
+
+    #tileset-canvas {
+      display: block;
+      image-rendering: pixelated;
+      cursor: pointer;
+      background: #0c121d;
+      border: 1px solid var(--line);
+    }
+
+    #splitter {
+      background: var(--line);
+      cursor: col-resize;
+    }
+
+    #splitter.dragging,
+    #splitter:hover {
+      background: #74a4e4;
+    }
+
+    #map-panel {
+      position: relative;
+      overflow: auto;
+      background:
+        radial-gradient(circle at top left, rgba(155,226,87,0.08), transparent 30%),
+        linear-gradient(180deg, #0c121b 0%, #09111b 100%);
+      padding: 18px;
+      cursor: crosshair;
+    }
+
+    #map-canvas {
+      display: block;
+      image-rendering: pixelated;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+      background: #0b1018;
+    }
+
+    #help {
+      padding: 10px 12px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      background: var(--panel-3);
+    }
+
+    #help strong {
+      color: var(--text);
+    }
+
+    @media (max-width: 1200px) {
+      #toolbar {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      #status {
+        justify-self: start;
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="toolbar">
+      <div class="control">
+        <label for="map-select">Existing Map</label>
+        <div class="control inline">
+          <select id="map-select"></select>
+          <button id="load-map" class="secondary" type="button">Load</button>
+        </div>
+      </div>
+      <div class="control">
+        <label for="map-name">Map Name</label>
+        <input id="map-name" type="text" value="default_map" spellcheck="false">
+      </div>
+      <div class="control">
+        <label for="tileset-select">Tileset</label>
+        <select id="tileset-select"></select>
+      </div>
+      <div class="control">
+        <label for="map-width">Map Size</label>
+        <div class="control inline">
+          <input id="map-width" type="number" min="1" value="40">
+          <input id="map-height" type="number" min="1" value="30">
+          <input id="tile-size" type="number" min="8" step="8" value="32">
+        </div>
+      </div>
+      <div class="control">
+        <label>Actions</label>
+        <div class="control inline">
+          <button id="new-map" type="button">New</button>
+          <button id="resize-map" class="secondary" type="button">Resize</button>
+          <button id="save-map" type="button">Save</button>
+        </div>
+      </div>
+      <div class="control">
+        <label>View</label>
+        <div class="control inline">
+          <button id="toggle-grid" class="active" type="button">Grid</button>
+          <button id="zoom-out" class="secondary" type="button">-</button>
+          <button id="zoom-in" class="secondary" type="button">+</button>
+        </div>
+      </div>
+      <div id="status">Loading editor...</div>
+    </div>
+
+    <div id="workspace">
+      <section id="tileset-panel">
+        <div class="panel-header">
+          <div class="panel-title">Tools</div>
+          <div id="mode-controls">
+            <button id="mode-paint" class="active" type="button">Paint</button>
+            <button id="mode-erase" type="button">Erase</button>
+            <button id="mode-collision" type="button">Collision</button>
+            <button id="mode-picker" type="button">Pick Tile</button>
+          </div>
+          <div id="brush-controls">
+            <button id="brush-dec" class="secondary" type="button">Brush -</button>
+            <input id="brush-size" type="number" min="1" max="12" value="1">
+            <button id="brush-inc" class="secondary" type="button">Brush +</button>
+          </div>
+        </div>
+        <div id="tileset-scroll">
+          <canvas id="tileset-canvas"></canvas>
+        </div>
+        <div id="help">
+          <div><strong>Pan:</strong> middle mouse or hold <strong>Space</strong> and drag</div>
+          <div><strong>Zoom:</strong> mouse wheel over the map</div>
+          <div><strong>Collision:</strong> left adds, right removes</div>
+        </div>
+      </section>
+
+      <div id="splitter"></div>
+
+      <section id="map-panel">
+        <canvas id="map-canvas"></canvas>
+      </section>
+    </div>
+  </div>
+
+  <script type="module" src="/map-editor.js"></script>
+</body>
+</html>

@@ -6,6 +6,7 @@
   "main": "game.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "map-editor": "vite --host 127.0.0.1 --open /map-editor.html",
     "maki:dev": "maki dev",
     "tilemap": "maki tilemap",
     "watch": "vite --host 127.0.0.1 --open",

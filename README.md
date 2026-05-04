@@ -7,6 +7,7 @@ A small 2D pixel RPG prototype built with `@tialops/maki`.
 ```bash
 npm install
 npm run dev
+npm run map-editor
 npx maki dev
 ```
 
@@ -18,9 +19,13 @@ Run the editor with:
 
 ```bash
 npm run tilemap
+npm run map-editor
 ```
 
 This project applies local Maki tilemap editor fixes automatically during `npm install` through the `postinstall` script.
+
+The dedicated editor is available at `http://127.0.0.1:5173/map-editor.html`.
+It saves directly to `assets/maps/<name>.json` and stays compatible with the current Maki map format.
 
 The auto-installed fixes currently cover:
 
