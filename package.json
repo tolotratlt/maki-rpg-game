@@ -10,7 +10,8 @@
     "tilemap": "maki tilemap",
     "watch": "vite --host 127.0.0.1 --open",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node scripts/patch-maki-tilemap-editor.mjs"
   },
   "keywords": [],
   "author": "",

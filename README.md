@@ -12,6 +12,22 @@ npx maki dev
 
 If Vite does not open the browser automatically, open `http://127.0.0.1:5173/`.
 
+## Tilemap editor
+
+Run the editor with:
+
+```bash
+npm run tilemap
+```
+
+This project applies local Maki tilemap editor fixes automatically during `npm install` through the `postinstall` script.
+
+The auto-installed fixes currently cover:
+
+- proper editor URL opening on Windows so the selected map name is preserved
+- a resizable tileset and map split view
+- map panning with `Shift + left click` or middle mouse drag
+
 ## Project structure
 
 ```text
