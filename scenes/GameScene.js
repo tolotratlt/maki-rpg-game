@@ -23,7 +23,6 @@ const BOMB_KICK_RANGE = 1
 const BOMB_KICK_SPEED = TILE_SIZE * 9 * BOMB_KICK_RANGE
 const BOMB_KICK_DRAG = TILE_SIZE * 11
 const PLAYER_MAX_BOMBS = 5
-const WAVE_NUMBER = 1
 const ENEMY1_COUNT_WAVE_1 = 2
 const ENEMY1_CHASE_SPEED = 120
 const ENEMY1_FLEE_SPEED = 165
@@ -32,13 +31,29 @@ const ENEMY1_PATH_RECALC_MS_MIN = 2000
 const ENEMY1_PATH_RECALC_MS_MAX = 3000
 const ENEMY1_PAUSE_MS_MIN = 2000
 const ENEMY1_PAUSE_MS_MAX = 4000
-const ENEMY1_BOMB_RANGE = TILE_SIZE * 2
+const ENEMY1_BOMB_RANGE = TILE_SIZE * 1.6
 const ENEMY1_BOMB_ATTEMPT_COOLDOWN_MAX_MS = 2000
 const ENEMY1_MAX_BOMBS = 5
 const ENEMY1_HIT_RADIUS = TILE_SIZE * 1.5
 const ENEMY1_HIT_REQUIRED = 2
 const ENEMY1_FLEE_BOMB_RADIUS = TILE_SIZE * 4
 const ENEMY1_FLIP_X_THRESHOLD = 12
+const ENEMY2_COUNT_WAVE_2 = 6
+const ENEMY2_CHASE_SPEED = 120
+const ENEMY2_FLEE_SPEED = 165
+const ENEMY2_SCALE = 0.72
+const ENEMY2_PATH_RECALC_MS_MIN = 2000
+const ENEMY2_PATH_RECALC_MS_MAX = 3000
+const ENEMY2_PAUSE_MS_MIN = 2000
+const ENEMY2_PAUSE_MS_MAX = 4000
+const ENEMY2_BOMB_RANGE = TILE_SIZE * 2
+const ENEMY2_BOMB_ATTEMPT_COOLDOWN_MAX_MS = 2000
+const ENEMY2_MAX_BOMBS = 5
+const ENEMY2_HIT_RADIUS = TILE_SIZE * 1.5
+const ENEMY2_HIT_REQUIRED = 2
+const ENEMY2_FLEE_BOMB_RADIUS = TILE_SIZE * 4
+const ENEMY2_FLIP_X_THRESHOLD = 12
+const WAVE2_SPAWN_DELAY_MS = 4000
 
 export default class GameScene extends Scene {
     constructor() {
@@ -64,6 +79,9 @@ export default class GameScene extends Scene {
         this.enemies = []
         this.enemyBlockedGrid = []
         this.nextEnemyId = 1
+        this.currentWave = 1
+        this.wave2SpawnScheduled = false
+        this.wave2SpawnTimer = null
     }
 
     preload() {
@@ -96,6 +114,10 @@ export default class GameScene extends Scene {
         this.preloadEnemyFrames('enemy-run', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/2-Run', 14)
         this.preloadEnemyFrames('enemy-hit', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/8-Hit', 8)
         this.preloadEnemyFrames('enemy-dead-ground', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/10-Dead Ground', 4)
+        this.preloadEnemyFrames('enemy2-idle', 'sprites/Pirate Bomb/Sprites/4-Enemy-Big Guy/1-Idle', 38)
+        this.preloadEnemyFrames('enemy2-run', 'sprites/Pirate Bomb/Sprites/4-Enemy-Big Guy/2-Run', 16)
+        this.preloadEnemyFrames('enemy2-hit', 'sprites/Pirate Bomb/Sprites/4-Enemy-Big Guy/12-Hit', 8)
+        this.preloadEnemyFrames('enemy2-dead-ground', 'sprites/Pirate Bomb/Sprites/4-Enemy-Big Guy/14-Dead Ground', 4)
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
@@ -182,7 +204,7 @@ export default class GameScene extends Scene {
         }
 
         if (this.isGameOver) {
-            this.hud.setText(`HP: ${this.hp}\nWave ${WAVE_NUMBER}`)
+            this.hud.setText(`HP: ${this.hp}\nWave ${this.currentWave}`)
             return
         }
 
@@ -193,7 +215,7 @@ export default class GameScene extends Scene {
         this.updateEnemies()
         this.handleBombInput()
 
-        this.hud.setText(`HP: ${this.hp}\nWave ${WAVE_NUMBER}`)
+        this.hud.setText(`HP: ${this.hp}\nWave ${this.currentWave}`)
     }
 
     _getConfig() {
@@ -399,40 +421,144 @@ export default class GameScene extends Scene {
                 repeat: 0
             })
         }
-    }
 
-    spawnWaveOneEnemies() {
-        for (let i = 0; i < ENEMY1_COUNT_WAVE_1; i += 1) {
-            this.spawnEnemy()
+        if (!this.anims.exists('enemy2-idle')) {
+            this.anims.create({
+                key: 'enemy2-idle',
+                frames: Array.from({ length: 38 }, (_, index) => ({ key: `enemy2-idle-${index + 1}` })),
+                frameRate: 10,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('enemy2-run')) {
+            this.anims.create({
+                key: 'enemy2-run',
+                frames: Array.from({ length: 16 }, (_, index) => ({ key: `enemy2-run-${index + 1}` })),
+                frameRate: 12,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('enemy2-hit')) {
+            this.anims.create({
+                key: 'enemy2-hit',
+                frames: Array.from({ length: 8 }, (_, index) => ({ key: `enemy2-hit-${index + 1}` })),
+                frameRate: 12,
+                repeat: 0
+            })
+        }
+
+        if (!this.anims.exists('enemy2-dead-ground')) {
+            this.anims.create({
+                key: 'enemy2-dead-ground',
+                frames: Array.from({ length: 4 }, (_, index) => ({ key: `enemy2-dead-ground-${index + 1}` })),
+                frameRate: 8,
+                repeat: 0
+            })
         }
     }
 
-    spawnEnemy() {
+    spawnWaveOneEnemies() {
+        this.currentWave = 1
+        this.wave2SpawnScheduled = false
+        this.wave2SpawnTimer = null
+        for (let i = 0; i < ENEMY1_COUNT_WAVE_1; i += 1) {
+            this.spawnEnemy(1)
+        }
+    }
+
+    spawnWaveTwoEnemies() {
+        this.currentWave = 2
+        this.wave2SpawnScheduled = false
+        this.wave2SpawnTimer = null
+        for (let i = 0; i < ENEMY2_COUNT_WAVE_2; i += 1) {
+            this.spawnEnemy(2)
+        }
+    }
+
+    spawnEnemy(waveNumber) {
+        const isWave2 = waveNumber === 2
+        const stats = isWave2
+            ? {
+                wave: 2,
+                chaseSpeed: ENEMY2_CHASE_SPEED,
+                fleeSpeed: ENEMY2_FLEE_SPEED,
+                pathRecalcMsMin: ENEMY2_PATH_RECALC_MS_MIN,
+                pathRecalcMsMax: ENEMY2_PATH_RECALC_MS_MAX,
+                pauseMsMin: ENEMY2_PAUSE_MS_MIN,
+                pauseMsMax: ENEMY2_PAUSE_MS_MAX,
+                bombRange: ENEMY2_BOMB_RANGE,
+                bombAttemptCooldownMaxMs: ENEMY2_BOMB_ATTEMPT_COOLDOWN_MAX_MS,
+                maxBombs: ENEMY2_MAX_BOMBS,
+                hitRadius: ENEMY2_HIT_RADIUS,
+                hitRequired: ENEMY2_HIT_REQUIRED,
+                fleeBombRadius: ENEMY2_FLEE_BOMB_RADIUS,
+                flipXThreshold: ENEMY2_FLIP_X_THRESHOLD,
+                scale: ENEMY2_SCALE,
+                bodySize: { width: 36, height: 42 },
+                bodyOffset: { x: 45, y: 86 },
+                animations: {
+                    idle: 'enemy2-idle',
+                    run: 'enemy2-run',
+                    hit: 'enemy2-hit',
+                    dead: 'enemy2-dead-ground'
+                },
+                spawnTexture: 'enemy2-idle-1'
+            }
+            : {
+                wave: 1,
+                chaseSpeed: ENEMY1_CHASE_SPEED,
+                fleeSpeed: ENEMY1_FLEE_SPEED,
+                pathRecalcMsMin: ENEMY1_PATH_RECALC_MS_MIN,
+                pathRecalcMsMax: ENEMY1_PATH_RECALC_MS_MAX,
+                pauseMsMin: ENEMY1_PAUSE_MS_MIN,
+                pauseMsMax: ENEMY1_PAUSE_MS_MAX,
+                bombRange: ENEMY1_BOMB_RANGE,
+                bombAttemptCooldownMaxMs: ENEMY1_BOMB_ATTEMPT_COOLDOWN_MAX_MS,
+                maxBombs: ENEMY1_MAX_BOMBS,
+                hitRadius: ENEMY1_HIT_RADIUS,
+                hitRequired: ENEMY1_HIT_REQUIRED,
+                fleeBombRadius: ENEMY1_FLEE_BOMB_RADIUS,
+                flipXThreshold: ENEMY1_FLIP_X_THRESHOLD,
+                scale: ENEMY1_SCALE,
+                bodySize: { width: 36, height: 42 },
+                bodyOffset: { x: 45, y: 86 },
+                animations: {
+                    idle: 'enemy-idle',
+                    run: 'enemy-run',
+                    hit: 'enemy-hit',
+                    dead: 'enemy-dead-ground'
+                },
+                spawnTexture: 'enemy-idle-1'
+            }
+
         const spawn = this.findRandomFreeCellCenter()
-        const sprite = this.physics.add.sprite(spawn.x, spawn.y, 'enemy-idle-1')
+        const sprite = this.physics.add.sprite(spawn.x, spawn.y, stats.spawnTexture)
         sprite.setOrigin(0.5, 1)
-        sprite.setScale(ENEMY1_SCALE)
+        sprite.setScale(stats.scale)
         sprite.setCollideWorldBounds(true)
         sprite.body.setAllowGravity(false)
-        sprite.body.setSize(36, 42)
-        sprite.body.setOffset(45, 86)
-        sprite.play('enemy-idle')
+        sprite.body.setSize(stats.bodySize.width, stats.bodySize.height)
+        sprite.body.setOffset(stats.bodyOffset.x, stats.bodyOffset.y)
+        sprite.play(stats.animations.idle)
 
         this.physics.add.collider(sprite, manager.getWallGroup(this, 'default_map'))
 
         const enemy = {
             id: this.nextEnemyId++,
             sprite,
-            hp: ENEMY1_HIT_REQUIRED,
-            bombCount: ENEMY1_MAX_BOMBS,
+            stats,
+            hp: stats.hitRequired,
+            bombCount: stats.maxBombs,
             alive: true,
             isHit: false,
             isDead: false,
             isPaused: false,
             pauseUntil: 0,
-            nextThinkAt: this.time.now + Phaser.Math.Between(ENEMY1_PATH_RECALC_MS_MIN, ENEMY1_PATH_RECALC_MS_MAX),
+            nextThinkAt: this.time.now + Phaser.Math.Between(stats.pathRecalcMsMin, stats.pathRecalcMsMax),
             nextPathAt: this.time.now,
-            nextBombAttemptAt: this.time.now + Phaser.Math.Between(0, ENEMY1_BOMB_ATTEMPT_COOLDOWN_MAX_MS),
+            nextBombAttemptAt: this.time.now + Phaser.Math.Between(0, stats.bombAttemptCooldownMaxMs),
             path: [],
             facing: 1
         }
@@ -454,10 +580,10 @@ export default class GameScene extends Scene {
             }
 
             if (now >= enemy.nextThinkAt) {
-                enemy.nextThinkAt = now + Phaser.Math.Between(ENEMY1_PATH_RECALC_MS_MIN, ENEMY1_PATH_RECALC_MS_MAX)
+                enemy.nextThinkAt = now + Phaser.Math.Between(enemy.stats.pathRecalcMsMin, enemy.stats.pathRecalcMsMax)
                 if (Math.random() < 0.45) {
                     enemy.isPaused = true
-                    enemy.pauseUntil = now + Phaser.Math.Between(ENEMY1_PAUSE_MS_MIN, ENEMY1_PAUSE_MS_MAX)
+                    enemy.pauseUntil = now + Phaser.Math.Between(enemy.stats.pauseMsMin, enemy.stats.pauseMsMax)
                 }
             }
 
@@ -469,17 +595,17 @@ export default class GameScene extends Scene {
                 enemy.path = []
             }
 
-            const nearbyBomb = this.findNearestBomb(enemy.sprite.x, enemy.sprite.y, ENEMY1_FLEE_BOMB_RADIUS)
+            const nearbyBomb = this.findNearestBomb(enemy.sprite.x, enemy.sprite.y, enemy.stats.fleeBombRadius)
             if (nearbyBomb) {
                 enemy.isPaused = false
                 enemy.path = this.computeFleePath(enemy, nearbyBomb, claimedNextCells)
-                this.moveEnemyAlongPath(enemy, claimedNextCells, ENEMY1_FLEE_SPEED)
+                this.moveEnemyAlongPath(enemy, claimedNextCells, enemy.stats.fleeSpeed)
                 continue
             }
 
             if (enemy.isPaused) {
                 enemy.sprite.setVelocity(0, 0)
-                enemy.sprite.play('enemy-idle', true)
+                enemy.sprite.play(enemy.stats.animations.idle, true)
                 continue
             }
 
@@ -489,20 +615,20 @@ export default class GameScene extends Scene {
                 this.captain.sprite.x,
                 this.captain.sprite.y
             )
-            if (playerDistance <= ENEMY1_BOMB_RANGE) {
+            if (playerDistance <= enemy.stats.bombRange) {
                 enemy.path = []
                 enemy.sprite.setVelocity(0, 0)
-                enemy.sprite.play('enemy-idle', true)
+                enemy.sprite.play(enemy.stats.animations.idle, true)
                 this.enemyTrySpawnBomb(enemy, now)
                 continue
             }
 
             if (now >= enemy.nextPathAt) {
-                enemy.nextPathAt = now + Phaser.Math.Between(ENEMY1_PATH_RECALC_MS_MIN, ENEMY1_PATH_RECALC_MS_MAX)
+                enemy.nextPathAt = now + Phaser.Math.Between(enemy.stats.pathRecalcMsMin, enemy.stats.pathRecalcMsMax)
                 enemy.path = this.computePathToPlayer(enemy)
             }
 
-            this.moveEnemyAlongPath(enemy, claimedNextCells, ENEMY1_CHASE_SPEED)
+            this.moveEnemyAlongPath(enemy, claimedNextCells, enemy.stats.chaseSpeed)
         }
     }
 
@@ -532,7 +658,7 @@ export default class GameScene extends Scene {
         const sprite = enemy.sprite
         if (!enemy.path || enemy.path.length === 0) {
             sprite.setVelocity(0, 0)
-            sprite.play('enemy-idle', true)
+            sprite.play(enemy.stats.animations.idle, true)
             return
         }
 
@@ -540,7 +666,7 @@ export default class GameScene extends Scene {
         const nextKey = `${next.col}:${next.row}`
         if (claimedNextCells.has(nextKey)) {
             sprite.setVelocity(0, 0)
-            sprite.play('enemy-idle', true)
+            sprite.play(enemy.stats.animations.idle, true)
             return
         }
         const targetX = next.col * TILE_SIZE + TILE_SIZE / 2
@@ -550,18 +676,18 @@ export default class GameScene extends Scene {
             enemy.path.shift()
             sprite.setVelocity(0, 0)
             if (enemy.path.length === 0) {
-                sprite.play('enemy-idle', true)
+                sprite.play(enemy.stats.animations.idle, true)
             }
             return
         }
 
         delta.normalize().scale(speed)
         sprite.setVelocity(delta.x, delta.y)
-        if (Math.abs(delta.x) > ENEMY1_FLIP_X_THRESHOLD) {
+        if (Math.abs(delta.x) > enemy.stats.flipXThreshold) {
             enemy.facing = delta.x < 0 ? -1 : 1
         }
         sprite.setFlipX(enemy.facing < 0)
-        sprite.play('enemy-run', true)
+        sprite.play(enemy.stats.animations.run, true)
         claimedNextCells.add(nextKey)
     }
 
@@ -570,14 +696,14 @@ export default class GameScene extends Scene {
             return
         }
 
-        enemy.nextBombAttemptAt = now + Phaser.Math.Between(0, ENEMY1_BOMB_ATTEMPT_COOLDOWN_MAX_MS)
+        enemy.nextBombAttemptAt = now + Phaser.Math.Between(0, enemy.stats.bombAttemptCooldownMaxMs)
         const distanceToPlayer = Phaser.Math.Distance.Between(
             enemy.sprite.x,
             enemy.sprite.y,
             this.captain.sprite.x,
             this.captain.sprite.y
         )
-        if (distanceToPlayer > ENEMY1_BOMB_RANGE) {
+        if (distanceToPlayer > enemy.stats.bombRange) {
             return
         }
 
@@ -1053,7 +1179,7 @@ export default class GameScene extends Scene {
                         const ownerId = bomb.getData('ownerId')
                         const owner = this.enemies.find(enemy => enemy.id === ownerId)
                         if (owner && owner.alive) {
-                            owner.bombCount = Math.min(ENEMY1_MAX_BOMBS, owner.bombCount + 1)
+                            owner.bombCount = Math.min(owner.stats.maxBombs, owner.bombCount + 1)
                         }
                     }
                     this.bombs.remove(bomb, true, true)
@@ -1090,6 +1216,9 @@ export default class GameScene extends Scene {
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.nextEnemyId = 1
+        this.currentWave = 1
+        this.wave2SpawnScheduled = false
+        this.wave2SpawnTimer = null
 
         this.captain.sprite.removeAllListeners()
         this.captain.sprite.setActive(true)
@@ -1304,7 +1433,7 @@ export default class GameScene extends Scene {
                 explosionX,
                 explosionY
             )
-            if (distance > ENEMY1_HIT_RADIUS) {
+            if (distance > enemy.stats.hitRadius) {
                 continue
             }
 
@@ -1321,14 +1450,14 @@ export default class GameScene extends Scene {
     hitEnemy(enemy) {
         enemy.isHit = true
         enemy.sprite.setVelocity(0, 0)
-        enemy.sprite.play('enemy-hit', true)
+        enemy.sprite.play(enemy.stats.animations.hit, true)
         enemy.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, animation => {
-            if (!enemy.alive || animation.key !== 'enemy-hit') {
+            if (!enemy.alive || animation.key !== enemy.stats.animations.hit) {
                 return
             }
 
             enemy.isHit = false
-            enemy.sprite.play('enemy-idle', true)
+            enemy.sprite.play(enemy.stats.animations.idle, true)
         })
     }
 
@@ -1336,12 +1465,35 @@ export default class GameScene extends Scene {
         enemy.alive = false
         enemy.isDead = true
         enemy.sprite.setVelocity(0, 0)
-        enemy.sprite.play('enemy-dead-ground', true)
+        enemy.sprite.play(enemy.stats.animations.dead, true)
         enemy.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, animation => {
-            if (animation.key !== 'enemy-dead-ground') {
+            if (animation.key !== enemy.stats.animations.dead) {
                 return
             }
             enemy.sprite.destroy()
+            this.tryScheduleWaveTwoSpawn()
+        })
+    }
+
+    tryScheduleWaveTwoSpawn() {
+        if (this.wave2SpawnScheduled || this.currentWave !== 1 || this.isGameOver) {
+            return
+        }
+
+        const wave1StillPresent = this.enemies.some(enemy =>
+            enemy.stats.wave === 1 &&
+            (enemy.alive || enemy.sprite?.active)
+        )
+        if (wave1StillPresent) {
+            return
+        }
+
+        this.wave2SpawnScheduled = true
+        this.wave2SpawnTimer = this.time.delayedCall(WAVE2_SPAWN_DELAY_MS, () => {
+            if (this.isGameOver || this.isRestarting) {
+                return
+            }
+            this.spawnWaveTwoEnemies()
         })
     }
 
