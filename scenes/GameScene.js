@@ -24,20 +24,21 @@ const BOMB_KICK_SPEED = TILE_SIZE * 9 * BOMB_KICK_RANGE
 const BOMB_KICK_DRAG = TILE_SIZE * 11
 const PLAYER_MAX_BOMBS = 5
 const WAVE_NUMBER = 1
-const ENEMY_COUNT_WAVE_1 = 2
-const ENEMY_SPEED = 120
+const ENEMY1_COUNT_WAVE_1 = 2
+const ENEMY1_CHASE_SPEED = 120
+const ENEMY1_FLEE_SPEED = 165
 const ENEMY1_SCALE = 0.72
-const ENEMY_PATH_RECALC_MS_MIN = 2000
-const ENEMY_PATH_RECALC_MS_MAX = 3000
-const ENEMY_PAUSE_MS_MIN = 2000
-const ENEMY_PAUSE_MS_MAX = 4000
-const ENEMY_BOMB_RANGE = TILE_SIZE * 2
-const ENEMY_BOMB_ATTEMPT_COOLDOWN_MAX_MS = 2000
-const ENEMY_MAX_BOMBS = 5
-const ENEMY_HIT_RADIUS = TILE_SIZE * 1.5
-const ENEMY_HIT_REQUIRED = 2
-const ENEMY_FLEE_BOMB_RADIUS = TILE_SIZE * 4
-const ENEMY_FLIP_X_THRESHOLD = 12
+const ENEMY1_PATH_RECALC_MS_MIN = 2000
+const ENEMY1_PATH_RECALC_MS_MAX = 3000
+const ENEMY1_PAUSE_MS_MIN = 2000
+const ENEMY1_PAUSE_MS_MAX = 4000
+const ENEMY1_BOMB_RANGE = TILE_SIZE * 2
+const ENEMY1_BOMB_ATTEMPT_COOLDOWN_MAX_MS = 2000
+const ENEMY1_MAX_BOMBS = 5
+const ENEMY1_HIT_RADIUS = TILE_SIZE * 1.5
+const ENEMY1_HIT_REQUIRED = 2
+const ENEMY1_FLEE_BOMB_RADIUS = TILE_SIZE * 4
+const ENEMY1_FLIP_X_THRESHOLD = 12
 
 export default class GameScene extends Scene {
     constructor() {
@@ -401,7 +402,7 @@ export default class GameScene extends Scene {
     }
 
     spawnWaveOneEnemies() {
-        for (let i = 0; i < ENEMY_COUNT_WAVE_1; i += 1) {
+        for (let i = 0; i < ENEMY1_COUNT_WAVE_1; i += 1) {
             this.spawnEnemy()
         }
     }
@@ -422,16 +423,16 @@ export default class GameScene extends Scene {
         const enemy = {
             id: this.nextEnemyId++,
             sprite,
-            hp: ENEMY_HIT_REQUIRED,
-            bombCount: ENEMY_MAX_BOMBS,
+            hp: ENEMY1_HIT_REQUIRED,
+            bombCount: ENEMY1_MAX_BOMBS,
             alive: true,
             isHit: false,
             isDead: false,
             isPaused: false,
             pauseUntil: 0,
-            nextThinkAt: this.time.now + Phaser.Math.Between(ENEMY_PATH_RECALC_MS_MIN, ENEMY_PATH_RECALC_MS_MAX),
+            nextThinkAt: this.time.now + Phaser.Math.Between(ENEMY1_PATH_RECALC_MS_MIN, ENEMY1_PATH_RECALC_MS_MAX),
             nextPathAt: this.time.now,
-            nextBombAttemptAt: this.time.now + Phaser.Math.Between(0, ENEMY_BOMB_ATTEMPT_COOLDOWN_MAX_MS),
+            nextBombAttemptAt: this.time.now + Phaser.Math.Between(0, ENEMY1_BOMB_ATTEMPT_COOLDOWN_MAX_MS),
             path: [],
             facing: 1
         }
@@ -453,10 +454,10 @@ export default class GameScene extends Scene {
             }
 
             if (now >= enemy.nextThinkAt) {
-                enemy.nextThinkAt = now + Phaser.Math.Between(ENEMY_PATH_RECALC_MS_MIN, ENEMY_PATH_RECALC_MS_MAX)
+                enemy.nextThinkAt = now + Phaser.Math.Between(ENEMY1_PATH_RECALC_MS_MIN, ENEMY1_PATH_RECALC_MS_MAX)
                 if (Math.random() < 0.45) {
                     enemy.isPaused = true
-                    enemy.pauseUntil = now + Phaser.Math.Between(ENEMY_PAUSE_MS_MIN, ENEMY_PAUSE_MS_MAX)
+                    enemy.pauseUntil = now + Phaser.Math.Between(ENEMY1_PAUSE_MS_MIN, ENEMY1_PAUSE_MS_MAX)
                 }
             }
 
@@ -468,11 +469,11 @@ export default class GameScene extends Scene {
                 enemy.path = []
             }
 
-            const nearbyBomb = this.findNearestBomb(enemy.sprite.x, enemy.sprite.y, ENEMY_FLEE_BOMB_RADIUS)
+            const nearbyBomb = this.findNearestBomb(enemy.sprite.x, enemy.sprite.y, ENEMY1_FLEE_BOMB_RADIUS)
             if (nearbyBomb) {
                 enemy.isPaused = false
                 enemy.path = this.computeFleePath(enemy, nearbyBomb, claimedNextCells)
-                this.moveEnemyAlongPath(enemy, claimedNextCells)
+                this.moveEnemyAlongPath(enemy, claimedNextCells, ENEMY1_FLEE_SPEED)
                 continue
             }
 
@@ -488,7 +489,7 @@ export default class GameScene extends Scene {
                 this.captain.sprite.x,
                 this.captain.sprite.y
             )
-            if (playerDistance <= ENEMY_BOMB_RANGE) {
+            if (playerDistance <= ENEMY1_BOMB_RANGE) {
                 enemy.path = []
                 enemy.sprite.setVelocity(0, 0)
                 enemy.sprite.play('enemy-idle', true)
@@ -497,11 +498,11 @@ export default class GameScene extends Scene {
             }
 
             if (now >= enemy.nextPathAt) {
-                enemy.nextPathAt = now + Phaser.Math.Between(ENEMY_PATH_RECALC_MS_MIN, ENEMY_PATH_RECALC_MS_MAX)
+                enemy.nextPathAt = now + Phaser.Math.Between(ENEMY1_PATH_RECALC_MS_MIN, ENEMY1_PATH_RECALC_MS_MAX)
                 enemy.path = this.computePathToPlayer(enemy)
             }
 
-            this.moveEnemyAlongPath(enemy, claimedNextCells)
+            this.moveEnemyAlongPath(enemy, claimedNextCells, ENEMY1_CHASE_SPEED)
         }
     }
 
@@ -527,7 +528,7 @@ export default class GameScene extends Scene {
         return []
     }
 
-    moveEnemyAlongPath(enemy, claimedNextCells) {
+    moveEnemyAlongPath(enemy, claimedNextCells, speed) {
         const sprite = enemy.sprite
         if (!enemy.path || enemy.path.length === 0) {
             sprite.setVelocity(0, 0)
@@ -554,9 +555,9 @@ export default class GameScene extends Scene {
             return
         }
 
-        delta.normalize().scale(ENEMY_SPEED)
+        delta.normalize().scale(speed)
         sprite.setVelocity(delta.x, delta.y)
-        if (Math.abs(delta.x) > ENEMY_FLIP_X_THRESHOLD) {
+        if (Math.abs(delta.x) > ENEMY1_FLIP_X_THRESHOLD) {
             enemy.facing = delta.x < 0 ? -1 : 1
         }
         sprite.setFlipX(enemy.facing < 0)
@@ -569,14 +570,14 @@ export default class GameScene extends Scene {
             return
         }
 
-        enemy.nextBombAttemptAt = now + Phaser.Math.Between(0, ENEMY_BOMB_ATTEMPT_COOLDOWN_MAX_MS)
+        enemy.nextBombAttemptAt = now + Phaser.Math.Between(0, ENEMY1_BOMB_ATTEMPT_COOLDOWN_MAX_MS)
         const distanceToPlayer = Phaser.Math.Distance.Between(
             enemy.sprite.x,
             enemy.sprite.y,
             this.captain.sprite.x,
             this.captain.sprite.y
         )
-        if (distanceToPlayer > ENEMY_BOMB_RANGE) {
+        if (distanceToPlayer > ENEMY1_BOMB_RANGE) {
             return
         }
 
@@ -1052,7 +1053,7 @@ export default class GameScene extends Scene {
                         const ownerId = bomb.getData('ownerId')
                         const owner = this.enemies.find(enemy => enemy.id === ownerId)
                         if (owner && owner.alive) {
-                            owner.bombCount = Math.min(ENEMY_MAX_BOMBS, owner.bombCount + 1)
+                            owner.bombCount = Math.min(ENEMY1_MAX_BOMBS, owner.bombCount + 1)
                         }
                     }
                     this.bombs.remove(bomb, true, true)
@@ -1303,7 +1304,7 @@ export default class GameScene extends Scene {
                 explosionX,
                 explosionY
             )
-            if (distance > ENEMY_HIT_RADIUS) {
+            if (distance > ENEMY1_HIT_RADIUS) {
                 continue
             }
 
