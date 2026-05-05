@@ -37,6 +37,7 @@ const ENEMY_MAX_BOMBS = 5
 const ENEMY_HIT_RADIUS = TILE_SIZE * 1.5
 const ENEMY_HIT_REQUIRED = 2
 const ENEMY_FLEE_BOMB_RADIUS = TILE_SIZE * 4
+const ENEMY_FLIP_X_THRESHOLD = 12
 
 export default class GameScene extends Scene {
     constructor() {
@@ -52,6 +53,7 @@ export default class GameScene extends Scene {
         this.isGameOver = false
         this.hp = 99
         this.bombCount = PLAYER_MAX_BOMBS
+        this.isRestarting = false
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.isCaptainHit = false
@@ -169,7 +171,7 @@ export default class GameScene extends Scene {
     }
 
     update() {
-        if (!this.captain?.sprite) {
+        if (this.isRestarting || !this.captain?.sprite) {
             return
         }
 
@@ -430,7 +432,8 @@ export default class GameScene extends Scene {
             nextThinkAt: this.time.now + Phaser.Math.Between(ENEMY_PATH_RECALC_MS_MIN, ENEMY_PATH_RECALC_MS_MAX),
             nextPathAt: this.time.now,
             nextBombAttemptAt: this.time.now + Phaser.Math.Between(0, ENEMY_BOMB_ATTEMPT_COOLDOWN_MAX_MS),
-            path: []
+            path: [],
+            facing: 1
         }
 
         this.enemies.push(enemy)
@@ -553,7 +556,10 @@ export default class GameScene extends Scene {
 
         delta.normalize().scale(ENEMY_SPEED)
         sprite.setVelocity(delta.x, delta.y)
-        sprite.setFlipX(delta.x < 0)
+        if (Math.abs(delta.x) > ENEMY_FLIP_X_THRESHOLD) {
+            enemy.facing = delta.x < 0 ? -1 : 1
+        }
+        sprite.setFlipX(enemy.facing < 0)
         sprite.play('enemy-run', true)
         claimedNextCells.add(nextKey)
     }
@@ -851,7 +857,7 @@ export default class GameScene extends Scene {
             this.replayButton.setTexture('replay-button')
         })
         this.replayButton.on('pointerup', () => {
-            this.scene.restart()
+            this.safeRestartScene()
         })
     }
 
@@ -878,6 +884,7 @@ export default class GameScene extends Scene {
         this.isGameOver = false
         this.hp = 99
         this.bombCount = PLAYER_MAX_BOMBS
+        this.isRestarting = false
         this.isCaptainHit = false
         this.isCaptainJumping = false
         this.lastHorizontalDirection = 'right'
@@ -1016,12 +1023,18 @@ export default class GameScene extends Scene {
         this.physics.add.collider(bomb, manager.getWallGroup(this, 'default_map'))
 
         this.time.delayedCall(offDelayMs, () => {
+            if (!this.sys?.isActive()) {
+                return
+            }
             if (!bomb.active) {
                 return
             }
 
             bomb.play('pirate-bomb-ticking')
             bomb.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+                if (!this.sys?.isActive()) {
+                    return
+                }
                 if (!bomb.active) {
                     return
                 }
@@ -1029,6 +1042,9 @@ export default class GameScene extends Scene {
                 this.handleBombExplosionDamage(bomb.x, bomb.y)
                 bomb.play('pirate-bomb-explosion')
                 bomb.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+                    if (!this.sys?.isActive()) {
+                        return
+                    }
                     bomb.body?.setVelocity(0, 0)
                     if (bomb.getData('ownerType') === 'player') {
                         this.bombCount = Math.min(PLAYER_MAX_BOMBS, this.bombCount + 1)
@@ -1043,6 +1059,83 @@ export default class GameScene extends Scene {
                 })
             })
         })
+    }
+
+    safeRestartScene() {
+        if (this.isRestarting) {
+            return
+        }
+
+        this.isRestarting = true
+        this.replayButton?.disableInteractive()
+        this.startButton?.disableInteractive()
+        this.backgroundMusic?.stop()
+        this.resetGameplaySession()
+    }
+
+    resetGameplaySession() {
+        this.time.removeAllEvents()
+        this.cleanupBombs()
+        this.cleanupEnemies()
+
+        this.physics.world.resume()
+
+        this.isGameStarted = false
+        this.isGameOver = false
+        this.hp = 99
+        this.bombCount = PLAYER_MAX_BOMBS
+        this.isCaptainHit = false
+        this.isCaptainJumping = false
+        this.lastHorizontalDirection = 'right'
+        this.lastBombDropAt = 0
+        this.nextEnemyId = 1
+
+        this.captain.sprite.removeAllListeners()
+        this.captain.sprite.setActive(true)
+        this.captain.sprite.setVisible(true)
+        this.captain.sprite.setVelocity(0, 0)
+        this.captain.sprite.setFlipX(false)
+        this.captain.sprite.body.enable = true
+        this.placeCaptainAtRandomSafeSpawn('default_map')
+        this.captain.sprite.play('captain-idle-right', true)
+        this.captain.sprite.anims.pause()
+
+        this.gameOverText?.setVisible(false)
+        this.hud?.setText(`HP: ${this.hp}`)
+
+        if (this.startButton) {
+            this.startButton.destroy()
+            this.startButton = null
+        }
+        this.createStartButton()
+
+        if (this.replayButton) {
+            this.replayButton.setTexture('replay-button')
+            this.replayButton.setVisible(false)
+            this.replayButton.disableInteractive()
+        } else {
+            this.createReplayButton()
+        }
+
+        this.spawnWaveOneEnemies()
+        this.isRestarting = false
+    }
+
+    cleanupBombs() {
+        const bombs = this.bombs?.getChildren?.() ?? []
+        bombs.forEach(bomb => {
+            bomb.removeAllListeners?.()
+            bomb.destroy()
+        })
+        this.bombs?.clear?.(true, true)
+    }
+
+    cleanupEnemies() {
+        this.enemies.forEach(enemy => {
+            enemy.sprite?.removeAllListeners?.()
+            enemy.sprite?.destroy()
+        })
+        this.enemies = []
     }
 
     handleBombExplosionDamage(explosionX, explosionY) {
@@ -1261,7 +1354,12 @@ export default class GameScene extends Scene {
     }
 
     setupBackgroundMusic() {
-        this.backgroundMusic = this.sound.add('battle-theme', {
+        if (!this.cache.audio.exists('battle-theme')) {
+            this.backgroundMusic = null
+            return
+        }
+
+        this.backgroundMusic = this.sound.get('battle-theme') ?? this.sound.add('battle-theme', {
             loop: true,
             volume: 0.35
         })
