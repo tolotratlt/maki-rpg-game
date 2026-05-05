@@ -23,6 +23,20 @@ const BOMB_KICK_RANGE = 1
 const BOMB_KICK_SPEED = TILE_SIZE * 9 * BOMB_KICK_RANGE
 const BOMB_KICK_DRAG = TILE_SIZE * 11
 const PLAYER_MAX_BOMBS = 5
+const WAVE_NUMBER = 1
+const ENEMY_COUNT_WAVE_1 = 2
+const ENEMY_SPEED = 120
+const ENEMY1_SCALE = 0.72
+const ENEMY_PATH_RECALC_MS_MIN = 2000
+const ENEMY_PATH_RECALC_MS_MAX = 3000
+const ENEMY_PAUSE_MS_MIN = 2000
+const ENEMY_PAUSE_MS_MAX = 4000
+const ENEMY_BOMB_RANGE = TILE_SIZE * 2
+const ENEMY_BOMB_ATTEMPT_COOLDOWN_MAX_MS = 2000
+const ENEMY_MAX_BOMBS = 5
+const ENEMY_HIT_RADIUS = TILE_SIZE * 1.5
+const ENEMY_HIT_REQUIRED = 2
+const ENEMY_FLEE_BOMB_RADIUS = TILE_SIZE * 4
 
 export default class GameScene extends Scene {
     constructor() {
@@ -44,6 +58,9 @@ export default class GameScene extends Scene {
         this.isCaptainJumping = false
         this.mapFurnitureSprites = []
         this.spaceKey = null
+        this.enemies = []
+        this.enemyBlockedGrid = []
+        this.nextEnemyId = 1
     }
 
     preload() {
@@ -72,6 +89,10 @@ export default class GameScene extends Scene {
         this.load.image('play-button', 'sprites/ui/play2x-1.png')
         this.load.image('replay-button', 'sprites/ui/repeat.png')
         this.load.image('replay-button-hover', 'sprites/ui/repeat-hover.png')
+        this.preloadEnemyFrames('enemy-idle', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/1-Idle', 34)
+        this.preloadEnemyFrames('enemy-run', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/2-Run', 14)
+        this.preloadEnemyFrames('enemy-hit', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/8-Hit', 8)
+        this.preloadEnemyFrames('enemy-dead-ground', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/10-Dead Ground', 4)
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
@@ -106,8 +127,11 @@ export default class GameScene extends Scene {
         this.createJumpAnimation()
         this.createDeadGroundAnimation()
         this.createBombAnimations()
+        this.createEnemyAnimations()
         this.captain.sprite.play('captain-idle-right')
         this.setupBackgroundMusic()
+        this.setupEnemyCollisionGrid('default_map')
+        this.spawnWaveOneEnemies()
 
         this.physics.add.collider(
             this.captain.sprite,
@@ -155,7 +179,7 @@ export default class GameScene extends Scene {
         }
 
         if (this.isGameOver) {
-            this.hud.setText(`HP: ${this.hp}`)
+            this.hud.setText(`HP: ${this.hp}\nWave ${WAVE_NUMBER}`)
             return
         }
 
@@ -163,9 +187,10 @@ export default class GameScene extends Scene {
         this.moveCaptain()
         this.updateSceneDepths()
         this.updateBombDepths()
+        this.updateEnemies()
         this.handleBombInput()
 
-        this.hud.setText(`HP: ${this.hp}`)
+        this.hud.setText(`HP: ${this.hp}\nWave ${WAVE_NUMBER}`)
     }
 
     _getConfig() {
@@ -329,6 +354,418 @@ export default class GameScene extends Scene {
         }
     }
 
+    preloadEnemyFrames(prefix, folderPath, count) {
+        for (let i = 1; i <= count; i += 1) {
+            this.load.image(`${prefix}-${i}`, `${folderPath}/${i}.png`)
+        }
+    }
+
+    createEnemyAnimations() {
+        if (!this.anims.exists('enemy-idle')) {
+            this.anims.create({
+                key: 'enemy-idle',
+                frames: Array.from({ length: 34 }, (_, index) => ({ key: `enemy-idle-${index + 1}` })),
+                frameRate: 10,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('enemy-run')) {
+            this.anims.create({
+                key: 'enemy-run',
+                frames: Array.from({ length: 14 }, (_, index) => ({ key: `enemy-run-${index + 1}` })),
+                frameRate: 12,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('enemy-hit')) {
+            this.anims.create({
+                key: 'enemy-hit',
+                frames: Array.from({ length: 8 }, (_, index) => ({ key: `enemy-hit-${index + 1}` })),
+                frameRate: 12,
+                repeat: 0
+            })
+        }
+
+        if (!this.anims.exists('enemy-dead-ground')) {
+            this.anims.create({
+                key: 'enemy-dead-ground',
+                frames: Array.from({ length: 4 }, (_, index) => ({ key: `enemy-dead-ground-${index + 1}` })),
+                frameRate: 8,
+                repeat: 0
+            })
+        }
+    }
+
+    spawnWaveOneEnemies() {
+        for (let i = 0; i < ENEMY_COUNT_WAVE_1; i += 1) {
+            this.spawnEnemy()
+        }
+    }
+
+    spawnEnemy() {
+        const spawn = this.findRandomFreeCellCenter()
+        const sprite = this.physics.add.sprite(spawn.x, spawn.y, 'enemy-idle-1')
+        sprite.setOrigin(0.5, 1)
+        sprite.setScale(ENEMY1_SCALE)
+        sprite.setCollideWorldBounds(true)
+        sprite.body.setAllowGravity(false)
+        sprite.body.setSize(36, 42)
+        sprite.body.setOffset(45, 86)
+        sprite.play('enemy-idle')
+
+        this.physics.add.collider(sprite, manager.getWallGroup(this, 'default_map'))
+
+        const enemy = {
+            id: this.nextEnemyId++,
+            sprite,
+            hp: ENEMY_HIT_REQUIRED,
+            bombCount: ENEMY_MAX_BOMBS,
+            alive: true,
+            isHit: false,
+            isDead: false,
+            isPaused: false,
+            pauseUntil: 0,
+            nextThinkAt: this.time.now + Phaser.Math.Between(ENEMY_PATH_RECALC_MS_MIN, ENEMY_PATH_RECALC_MS_MAX),
+            nextPathAt: this.time.now,
+            nextBombAttemptAt: this.time.now + Phaser.Math.Between(0, ENEMY_BOMB_ATTEMPT_COOLDOWN_MAX_MS),
+            path: []
+        }
+
+        this.enemies.push(enemy)
+    }
+
+    updateEnemies() {
+        const now = this.time.now
+        const claimedNextCells = new Set()
+        for (const enemy of this.enemies) {
+            if (!enemy.alive || enemy.isDead) {
+                continue
+            }
+
+            if (enemy.isHit) {
+                enemy.sprite.setVelocity(0, 0)
+                continue
+            }
+
+            if (now >= enemy.nextThinkAt) {
+                enemy.nextThinkAt = now + Phaser.Math.Between(ENEMY_PATH_RECALC_MS_MIN, ENEMY_PATH_RECALC_MS_MAX)
+                if (Math.random() < 0.45) {
+                    enemy.isPaused = true
+                    enemy.pauseUntil = now + Phaser.Math.Between(ENEMY_PAUSE_MS_MIN, ENEMY_PAUSE_MS_MAX)
+                }
+            }
+
+            if (enemy.isPaused && now >= enemy.pauseUntil) {
+                enemy.isPaused = false
+            }
+
+            if (enemy.isPaused) {
+                enemy.path = []
+            }
+
+            const nearbyBomb = this.findNearestBomb(enemy.sprite.x, enemy.sprite.y, ENEMY_FLEE_BOMB_RADIUS)
+            if (nearbyBomb) {
+                enemy.isPaused = false
+                enemy.path = this.computeFleePath(enemy, nearbyBomb, claimedNextCells)
+                this.moveEnemyAlongPath(enemy, claimedNextCells)
+                continue
+            }
+
+            if (enemy.isPaused) {
+                enemy.sprite.setVelocity(0, 0)
+                enemy.sprite.play('enemy-idle', true)
+                continue
+            }
+
+            const playerDistance = Phaser.Math.Distance.Between(
+                enemy.sprite.x,
+                enemy.sprite.y,
+                this.captain.sprite.x,
+                this.captain.sprite.y
+            )
+            if (playerDistance <= ENEMY_BOMB_RANGE) {
+                enemy.path = []
+                enemy.sprite.setVelocity(0, 0)
+                enemy.sprite.play('enemy-idle', true)
+                this.enemyTrySpawnBomb(enemy, now)
+                continue
+            }
+
+            if (now >= enemy.nextPathAt) {
+                enemy.nextPathAt = now + Phaser.Math.Between(ENEMY_PATH_RECALC_MS_MIN, ENEMY_PATH_RECALC_MS_MAX)
+                enemy.path = this.computePathToPlayer(enemy)
+            }
+
+            this.moveEnemyAlongPath(enemy, claimedNextCells)
+        }
+    }
+
+    computePathToPlayer(enemy) {
+        const from = this.worldToCell(enemy.sprite.x, enemy.sprite.y)
+        const playerCell = this.worldToCell(this.captain.sprite.x, this.captain.sprite.y)
+        const approachCells = this.getApproachCellsForEnemy(enemy, playerCell)
+
+        for (const target of approachCells) {
+            if (!this.isWalkableCell(target.col, target.row)) {
+                continue
+            }
+            const path = this.findPathBfs(from.col, from.row, target.col, target.row)
+            if (path.length > 0) {
+                return path
+            }
+        }
+
+        if (this.isWalkableCell(playerCell.col, playerCell.row)) {
+            return this.findPathBfs(from.col, from.row, playerCell.col, playerCell.row)
+        }
+
+        return []
+    }
+
+    moveEnemyAlongPath(enemy, claimedNextCells) {
+        const sprite = enemy.sprite
+        if (!enemy.path || enemy.path.length === 0) {
+            sprite.setVelocity(0, 0)
+            sprite.play('enemy-idle', true)
+            return
+        }
+
+        const next = enemy.path[0]
+        const nextKey = `${next.col}:${next.row}`
+        if (claimedNextCells.has(nextKey)) {
+            sprite.setVelocity(0, 0)
+            sprite.play('enemy-idle', true)
+            return
+        }
+        const targetX = next.col * TILE_SIZE + TILE_SIZE / 2
+        const targetY = next.row * TILE_SIZE + TILE_SIZE / 2
+        const delta = new Phaser.Math.Vector2(targetX - sprite.x, targetY - sprite.y)
+        if (delta.length() < 6) {
+            enemy.path.shift()
+            sprite.setVelocity(0, 0)
+            if (enemy.path.length === 0) {
+                sprite.play('enemy-idle', true)
+            }
+            return
+        }
+
+        delta.normalize().scale(ENEMY_SPEED)
+        sprite.setVelocity(delta.x, delta.y)
+        sprite.setFlipX(delta.x < 0)
+        sprite.play('enemy-run', true)
+        claimedNextCells.add(nextKey)
+    }
+
+    enemyTrySpawnBomb(enemy, now) {
+        if (enemy.bombCount <= 0 || now < enemy.nextBombAttemptAt) {
+            return
+        }
+
+        enemy.nextBombAttemptAt = now + Phaser.Math.Between(0, ENEMY_BOMB_ATTEMPT_COOLDOWN_MAX_MS)
+        const distanceToPlayer = Phaser.Math.Distance.Between(
+            enemy.sprite.x,
+            enemy.sprite.y,
+            this.captain.sprite.x,
+            this.captain.sprite.y
+        )
+        if (distanceToPlayer > ENEMY_BOMB_RANGE) {
+            return
+        }
+
+        const cell = this.worldToCell(enemy.sprite.x, enemy.sprite.y)
+        const bombCellX = cell.col * TILE_SIZE + TILE_SIZE / 2
+        const bombCellY = cell.row * TILE_SIZE + TILE_SIZE
+        if (this.findBombAtCell(bombCellX, bombCellY)) {
+            return
+        }
+
+        enemy.bombCount -= 1
+        this.dropBombFromOwner(bombCellX, bombCellY, { type: 'enemy', id: enemy.id })
+    }
+
+    findNearestBomb(x, y, maxDistance) {
+        const bombs = this.bombs?.getChildren?.() ?? []
+        let nearest = null
+        let nearestDistance = maxDistance
+        for (const bomb of bombs) {
+            if (!bomb.active) {
+                continue
+            }
+
+            const distance = Phaser.Math.Distance.Between(x, y, bomb.x, bomb.y)
+            if (distance <= nearestDistance) {
+                nearestDistance = distance
+                nearest = bomb
+            }
+        }
+
+        return nearest
+    }
+
+    computeFleePath(enemy, bomb, claimedNextCells) {
+        const from = this.worldToCell(enemy.sprite.x, enemy.sprite.y)
+        const bombCell = this.worldToCell(bomb.x, bomb.y)
+        const dirs = [
+            { c: -1, r: 0 }, { c: 1, r: 0 }, { c: 0, r: -1 }, { c: 0, r: 1 },
+            { c: -1, r: -1 }, { c: 1, r: -1 }, { c: -1, r: 1 }, { c: 1, r: 1 }
+        ]
+
+        const candidates = []
+        for (const dir of dirs) {
+            const nextCol = from.col + dir.c
+            const nextRow = from.row + dir.r
+            if (!this.isWalkableCell(nextCol, nextRow)) {
+                continue
+            }
+
+            if (dir.c !== 0 && dir.r !== 0) {
+                if (!this.isWalkableCell(from.col + dir.c, from.row) || !this.isWalkableCell(from.col, from.row + dir.r)) {
+                    continue
+                }
+            }
+
+            const key = `${nextCol}:${nextRow}`
+            const distanceBomb = Phaser.Math.Distance.Between(nextCol, nextRow, bombCell.col, bombCell.row)
+            const crowdPenalty = claimedNextCells.has(key) ? 1000 : 0
+            const randomTie = Math.random() * 0.25
+            const score = distanceBomb - crowdPenalty + randomTie
+            candidates.push({ col: nextCol, row: nextRow, score })
+        }
+
+        candidates.sort((a, b) => b.score - a.score)
+        const best = candidates[0]
+        return best ? [{ col: best.col, row: best.row }] : []
+    }
+
+    getApproachCellsForEnemy(enemy, playerCell) {
+        const offsets = [
+            { col: 0, row: -1 },
+            { col: 1, row: 0 },
+            { col: 0, row: 1 },
+            { col: -1, row: 0 },
+            { col: 1, row: -1 },
+            { col: 1, row: 1 },
+            { col: -1, row: 1 },
+            { col: -1, row: -1 }
+        ]
+        const start = enemy.id % offsets.length
+        const rotated = offsets.slice(start).concat(offsets.slice(0, start))
+        return rotated.map(offset => ({
+            col: playerCell.col + offset.col,
+            row: playerCell.row + offset.row
+        }))
+    }
+
+    setupEnemyCollisionGrid(mapName) {
+        this.enemyBlockedGrid = Array.from({ length: MAP_HEIGHT }, () =>
+            Array.from({ length: MAP_WIDTH }, () => false)
+        )
+        const mapData = this.cache.json.get(mapName)
+        const collisions = Array.isArray(mapData?.collisions) ? mapData.collisions : []
+        for (const rect of collisions) {
+            const startCol = Math.max(0, Math.floor(rect.x / TILE_SIZE))
+            const endCol = Math.min(MAP_WIDTH - 1, Math.ceil((rect.x + rect.w) / TILE_SIZE) - 1)
+            const startRow = Math.max(0, Math.floor(rect.y / TILE_SIZE))
+            const endRow = Math.min(MAP_HEIGHT - 1, Math.ceil((rect.y + rect.h) / TILE_SIZE) - 1)
+            for (let row = startRow; row <= endRow; row += 1) {
+                for (let col = startCol; col <= endCol; col += 1) {
+                    this.enemyBlockedGrid[row][col] = true
+                }
+            }
+        }
+    }
+
+    isWalkableCell(col, row) {
+        if (col < 0 || row < 0 || col >= MAP_WIDTH || row >= MAP_HEIGHT) {
+            return false
+        }
+        return !this.enemyBlockedGrid[row][col]
+    }
+
+    findPathBfs(startCol, startRow, goalCol, goalRow) {
+        if (!this.isWalkableCell(startCol, startRow) || !this.isWalkableCell(goalCol, goalRow)) {
+            return []
+        }
+
+        const queue = [{ col: startCol, row: startRow }]
+        const visited = Array.from({ length: MAP_HEIGHT }, () =>
+            Array.from({ length: MAP_WIDTH }, () => false)
+        )
+        const parent = Array.from({ length: MAP_HEIGHT }, () =>
+            Array.from({ length: MAP_WIDTH }, () => null)
+        )
+
+        visited[startRow][startCol] = true
+        const dirs = [
+            { c: -1, r: 0 }, { c: 1, r: 0 }, { c: 0, r: -1 }, { c: 0, r: 1 },
+            { c: -1, r: -1 }, { c: 1, r: -1 }, { c: -1, r: 1 }, { c: 1, r: 1 }
+        ]
+
+        while (queue.length > 0) {
+            const cur = queue.shift()
+            if (cur.col === goalCol && cur.row === goalRow) {
+                break
+            }
+
+            for (const dir of dirs) {
+                const nextCol = cur.col + dir.c
+                const nextRow = cur.row + dir.r
+                if (!this.isWalkableCell(nextCol, nextRow) || visited[nextRow][nextCol]) {
+                    continue
+                }
+
+                if (dir.c !== 0 && dir.r !== 0) {
+                    if (!this.isWalkableCell(cur.col + dir.c, cur.row) || !this.isWalkableCell(cur.col, cur.row + dir.r)) {
+                        continue
+                    }
+                }
+
+                visited[nextRow][nextCol] = true
+                parent[nextRow][nextCol] = cur
+                queue.push({ col: nextCol, row: nextRow })
+            }
+        }
+
+        if (!visited[goalRow][goalCol]) {
+            return []
+        }
+
+        const path = []
+        let node = { col: goalCol, row: goalRow }
+        while (node && !(node.col === startCol && node.row === startRow)) {
+            path.push(node)
+            node = parent[node.row][node.col]
+        }
+        path.reverse()
+        return path
+    }
+
+    worldToCell(x, y) {
+        return {
+            col: Phaser.Math.Clamp(Math.floor(x / TILE_SIZE), 0, MAP_WIDTH - 1),
+            row: Phaser.Math.Clamp(Math.floor(y / TILE_SIZE), 0, MAP_HEIGHT - 1)
+        }
+    }
+
+    findRandomFreeCellCenter() {
+        const cells = []
+        for (let row = 1; row < MAP_HEIGHT - 1; row += 1) {
+            for (let col = 1; col < MAP_WIDTH - 1; col += 1) {
+                if (this.isWalkableCell(col, row)) {
+                    cells.push({ col, row })
+                }
+            }
+        }
+        Phaser.Utils.Array.Shuffle(cells)
+        const pick = cells[0] ?? { col: 4, row: 4 }
+        return {
+            x: pick.col * TILE_SIZE + TILE_SIZE / 2,
+            y: pick.row * TILE_SIZE + TILE_SIZE
+        }
+    }
+
     createTilesetFurnitureLayer(mapName) {
         const mapData = this.cache.json.get(mapName)
         const customFurniture = mapData?.custom?.tilesetFurniture ?? []
@@ -394,7 +831,7 @@ export default class GameScene extends Scene {
         this.startButton.setScrollFactor(0)
         this.startButton.setDepth(1000)
         this.startButton.setInteractive({ useHandCursor: true })
-        this.startButton.on('pointerdown', () => {
+        this.startButton.on('pointerup', () => {
             this.startGame()
         })
     }
@@ -413,7 +850,7 @@ export default class GameScene extends Scene {
         this.replayButton.on('pointerout', () => {
             this.replayButton.setTexture('replay-button')
         })
-        this.replayButton.on('pointerdown', () => {
+        this.replayButton.on('pointerup', () => {
             this.scene.restart()
         })
     }
@@ -446,6 +883,11 @@ export default class GameScene extends Scene {
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.startButton = null
+        if (this.replayButton) {
+            this.replayButton.disableInteractive()
+            this.replayButton.setVisible(false)
+            this.replayButton.destroy()
+        }
         this.replayButton = null
         this.mapFurnitureSprites = []
     }
@@ -551,6 +993,10 @@ export default class GameScene extends Scene {
     }
 
     dropBomb(feetX, feetY) {
+        this.dropBombFromOwner(feetX, feetY, { type: 'player' })
+    }
+
+    dropBombFromOwner(feetX, feetY, owner) {
         const fuseBeats = Phaser.Utils.Array.GetRandom(BOMB_FUSE_BEATS)
         const offDelayMs = Math.max(0, fuseBeats - 1) * SECONDS_PER_BEAT * 1000
         const bomb = this.physics.add.sprite(feetX, feetY, 'pirate-bomb', 0)
@@ -563,7 +1009,8 @@ export default class GameScene extends Scene {
         bomb.body.setDrag(BOMB_KICK_DRAG, BOMB_KICK_DRAG)
         bomb.body.setBounce(0.1, 0.1)
         bomb.body.setMaxVelocity(BOMB_KICK_SPEED, BOMB_KICK_SPEED)
-        bomb.setData('spawnedByPlayer', true)
+        bomb.setData('ownerType', owner.type)
+        bomb.setData('ownerId', owner.id ?? null)
         this.bombs.add(bomb)
 
         this.physics.add.collider(bomb, manager.getWallGroup(this, 'default_map'))
@@ -579,17 +1026,28 @@ export default class GameScene extends Scene {
                     return
                 }
 
-                this.handleCaptainBombHit(bomb.x, bomb.y)
+                this.handleBombExplosionDamage(bomb.x, bomb.y)
                 bomb.play('pirate-bomb-explosion')
                 bomb.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
                     bomb.body?.setVelocity(0, 0)
-                    if (bomb.getData('spawnedByPlayer')) {
+                    if (bomb.getData('ownerType') === 'player') {
                         this.bombCount = Math.min(PLAYER_MAX_BOMBS, this.bombCount + 1)
+                    } else if (bomb.getData('ownerType') === 'enemy') {
+                        const ownerId = bomb.getData('ownerId')
+                        const owner = this.enemies.find(enemy => enemy.id === ownerId)
+                        if (owner && owner.alive) {
+                            owner.bombCount = Math.min(ENEMY_MAX_BOMBS, owner.bombCount + 1)
+                        }
                     }
                     this.bombs.remove(bomb, true, true)
                 })
             })
         })
+    }
+
+    handleBombExplosionDamage(explosionX, explosionY) {
+        this.handleCaptainBombHit(explosionX, explosionY)
+        this.handleEnemyBombHit(explosionX, explosionY)
     }
 
     findBombAtCell(cellX, cellY) {
@@ -737,6 +1195,59 @@ export default class GameScene extends Scene {
             this.isCaptainHit = false
             this.captain.sprite.setFlipX(false)
             this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
+        })
+    }
+
+    handleEnemyBombHit(explosionX, explosionY) {
+        for (const enemy of this.enemies) {
+            if (!enemy.alive || enemy.isDead || !enemy.sprite?.active) {
+                continue
+            }
+
+            const distance = Phaser.Math.Distance.Between(
+                enemy.sprite.x,
+                enemy.sprite.y,
+                explosionX,
+                explosionY
+            )
+            if (distance > ENEMY_HIT_RADIUS) {
+                continue
+            }
+
+            enemy.hp -= 1
+            if (enemy.hp <= 0) {
+                this.killEnemy(enemy)
+                continue
+            }
+
+            this.hitEnemy(enemy)
+        }
+    }
+
+    hitEnemy(enemy) {
+        enemy.isHit = true
+        enemy.sprite.setVelocity(0, 0)
+        enemy.sprite.play('enemy-hit', true)
+        enemy.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, animation => {
+            if (!enemy.alive || animation.key !== 'enemy-hit') {
+                return
+            }
+
+            enemy.isHit = false
+            enemy.sprite.play('enemy-idle', true)
+        })
+    }
+
+    killEnemy(enemy) {
+        enemy.alive = false
+        enemy.isDead = true
+        enemy.sprite.setVelocity(0, 0)
+        enemy.sprite.play('enemy-dead-ground', true)
+        enemy.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, animation => {
+            if (animation.key !== 'enemy-dead-ground') {
+                return
+            }
+            enemy.sprite.destroy()
         })
     }
 
