@@ -1,4 +1,4 @@
-# Captain Clown Nose RPG
+# Captain bomb & kick
 
 A small 2D pixel RPG prototype built with `@tialops/maki`.
 

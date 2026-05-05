@@ -18,8 +18,10 @@ const BOMB_EXPLOSION_FRAME_RATE = 9 / SECONDS_PER_BEAT
 const BOMB_FUSE_BEATS = [1.5, 2, 3]
 const BOMB_DROP_COOLDOWN_MS = SECONDS_PER_BEAT * 250
 const CAPTAIN_HIT_RADIUS = TILE_SIZE * 1.5
-const BOMB_KICK_SPEED = TILE_SIZE * 9
+const BOMB_KICK_RANGE = 1
+const BOMB_KICK_SPEED = TILE_SIZE * 9 * BOMB_KICK_RANGE
 const BOMB_KICK_DRAG = TILE_SIZE * 11
+const PLAYER_MAX_BOMBS = 5
 
 export default class GameScene extends Scene {
     constructor() {
@@ -34,6 +36,7 @@ export default class GameScene extends Scene {
         this.isGameStarted = false
         this.isGameOver = false
         this.hp = 99
+        this.bombCount = PLAYER_MAX_BOMBS
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.isCaptainHit = false
@@ -86,6 +89,7 @@ export default class GameScene extends Scene {
         this.captain.sprite.body.setSize(24, 20)
         this.captain.sprite.body.setOffset(20, 18)
         this.captain.sprite.setDepth(1)
+        this.removeDuplicateCaptainSprites()
         this.placeCaptainAtRandomSafeSpawn('default_map')
 
         this.captain.keys = this.createMergedMovementKeys()
@@ -248,8 +252,12 @@ export default class GameScene extends Scene {
         if (now - this.lastBombDropAt < BOMB_DROP_COOLDOWN_MS) {
             return
         }
+        if (this.bombCount <= 0) {
+            return
+        }
 
         this.lastBombDropAt = now
+        this.bombCount -= 1
         this.dropBomb(feet.x, feet.y)
     }
 
@@ -410,6 +418,7 @@ export default class GameScene extends Scene {
         this.isGameStarted = false
         this.isGameOver = false
         this.hp = 99
+        this.bombCount = PLAYER_MAX_BOMBS
         this.isCaptainHit = false
         this.isCaptainJumping = false
         this.lastHorizontalDirection = 'right'
@@ -417,6 +426,17 @@ export default class GameScene extends Scene {
         this.startButton = null
         this.replayButton = null
         this.mapFurnitureSprites = []
+    }
+
+    removeDuplicateCaptainSprites() {
+        const duplicates = this.children.list.filter(child =>
+            child !== this.captain.sprite &&
+            child?.texture?.key === 'captain'
+        )
+
+        duplicates.forEach(sprite => {
+            sprite.destroy()
+        })
     }
 
     configureMoveAnimationTempo() {
@@ -521,6 +541,7 @@ export default class GameScene extends Scene {
         bomb.body.setDrag(BOMB_KICK_DRAG, BOMB_KICK_DRAG)
         bomb.body.setBounce(0.1, 0.1)
         bomb.body.setMaxVelocity(BOMB_KICK_SPEED, BOMB_KICK_SPEED)
+        bomb.setData('spawnedByPlayer', true)
         this.bombs.add(bomb)
 
         this.physics.add.collider(bomb, manager.getWallGroup(this, 'default_map'))
@@ -540,6 +561,9 @@ export default class GameScene extends Scene {
                 bomb.play('pirate-bomb-explosion')
                 bomb.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
                     bomb.body?.setVelocity(0, 0)
+                    if (bomb.getData('spawnedByPlayer')) {
+                        this.bombCount = Math.min(PLAYER_MAX_BOMBS, this.bombCount + 1)
+                    }
                     this.bombs.remove(bomb, true, true)
                 })
             })
