@@ -252,6 +252,27 @@
       word-break: break-word;
     }
 
+    #object-source-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #tileset-object-help {
+      display: none;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-3);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    #tileset-object-help.active {
+      display: block;
+    }
+
     #tileset-scroll {
       overflow: auto;
       padding: 12px;
@@ -388,6 +409,13 @@
           </div>
           <div id="object-controls">
             <div class="panel-title">Furniture Assets</div>
+            <div id="object-source-controls">
+              <button id="object-source-asset" class="active" type="button">Asset</button>
+              <button id="object-source-tileset" type="button">Tileset</button>
+            </div>
+            <div id="tileset-object-help">
+              Use the current tileset selection as an object source, then place it on the map with left click. Right click removes the top object.
+            </div>
             <div id="object-grid"></div>
           </div>
         </div>
