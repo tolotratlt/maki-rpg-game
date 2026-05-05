@@ -11,6 +11,7 @@
     "tilemap": "maki tilemap",
     "watch": "vite --host 127.0.0.1 --open",
     "build": "vite build",
+    "build:dist": "vite build --outDir dist",
     "preview": "vite preview",
     "postinstall": "node scripts/patch-maki-tilemap-editor.mjs"
   },
