@@ -25,6 +25,8 @@ export default class GameScene extends Scene {
         this.bombs = null
         this.captain = null
         this.hud = null
+        this.startButton = null
+        this.isGameStarted = false
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.isCaptainHit = false
@@ -48,6 +50,7 @@ export default class GameScene extends Scene {
             frameWidth: BOMB_FRAME_WIDTH,
             frameHeight: BOMB_FRAME_HEIGHT
         })
+        this.load.image('play-button', 'sprites/ui/play2x-1.png')
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
@@ -96,10 +99,19 @@ export default class GameScene extends Scene {
         })
         this.hud.setScrollFactor(0)
         this.hud.setDepth(100)
+        this.hud.setText([
+            'Captain Clown Nose',
+            'Click Play to start'
+        ])
+        this.createStartButton()
     }
 
     update() {
         if (!this.captain?.sprite) {
+            return
+        }
+
+        if (!this.isGameStarted) {
             return
         }
 
@@ -274,6 +286,32 @@ export default class GameScene extends Scene {
         this.captain.sprite.setDepth(captainDepth)
     }
 
+    createStartButton() {
+        this.captain.sprite.setVelocity(0)
+        this.captain.sprite.anims.pause()
+
+        this.startButton = this.add.image(this.scale.width / 2, this.scale.height / 2, 'play-button')
+        this.startButton.setScrollFactor(0)
+        this.startButton.setDepth(200)
+        this.startButton.setInteractive({ useHandCursor: true })
+        this.startButton.on('pointerdown', () => {
+            this.startGame()
+        })
+    }
+
+    startGame() {
+        if (this.isGameStarted) {
+            return
+        }
+
+        this.isGameStarted = true
+        this.startButton?.destroy()
+        this.startButton = null
+        this.captain.sprite.anims.resume()
+        this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
+        this.startBackgroundMusic()
+    }
+
     configureMoveAnimationTempo() {
         const moveAnimations = [
             { key: 'captain-right', start: 0, end: 5 },
@@ -383,26 +421,31 @@ export default class GameScene extends Scene {
             loop: true,
             volume: 0.35
         })
-
-        const startMusic = () => {
-            if (!this.backgroundMusic?.isPlaying) {
-                this.backgroundMusic.play()
-            }
-        }
-
-        const startMusicFromKeyboard = () => {
-            startMusic()
-            window.removeEventListener('keydown', startMusicFromKeyboard, true)
-        }
-
-        this.input.once('pointerdown', startMusic)
-        this.input.keyboard.once('keydown', startMusic)
-        window.addEventListener('keydown', startMusicFromKeyboard, true)
         this.events.once('shutdown', () => {
             if (this.backgroundMusic?.isPlaying) {
                 this.backgroundMusic.stop()
             }
-            window.removeEventListener('keydown', startMusicFromKeyboard, true)
         })
+    }
+
+    startBackgroundMusic() {
+        if (!this.backgroundMusic || this.backgroundMusic.isPlaying) {
+            return
+        }
+
+        const playMusic = () => {
+            if (!this.backgroundMusic.isPlaying) {
+                this.backgroundMusic.play()
+            }
+        }
+
+        const soundContext = this.sound.context
+
+        if (soundContext?.state === 'suspended') {
+            soundContext.resume().then(playMusic).catch(playMusic)
+            return
+        }
+
+        playMusic()
     }
 }

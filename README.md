@@ -85,9 +85,11 @@ vite.config.js
 
 - `Arrow keys`: move Captain Clown Nose
 - `Space`: spawn a bomb
+- `Mouse click on Play`: start the game
 
 ## Asset source
 
 The character art used in this project comes from the free asset pack [Treasure Hunters](https://pixelfrog-assets.itch.io/treasure-hunters) by Pixel Frog.
 The bomb sprites used in this project come from the free asset pack [Pirate Bomb](https://pixelfrog-assets.itch.io/pirate-bomb) by Pixel Frog.
 The background music used in this project comes from the free asset pack [High Quality 16-Bit Music](https://hydrogene.itch.io/high-quality-16-bit-music) by Hydrogene.
+The UI play button used in this project comes from the free asset pack [Robin](https://prinbles.itch.io/robin) by Prinbles.
