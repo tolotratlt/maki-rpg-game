@@ -53,7 +53,23 @@ const ENEMY2_HIT_RADIUS = TILE_SIZE * 1.5
 const ENEMY2_HIT_REQUIRED = 2
 const ENEMY2_FLEE_BOMB_RADIUS = TILE_SIZE * 4
 const ENEMY2_FLIP_X_THRESHOLD = 12
+const ENEMY3_COUNT_WAVE_3 = 8
+const ENEMY3_CHASE_SPEED = 120
+const ENEMY3_FLEE_SPEED = 165
+const ENEMY3_SCALE = 0.72
+const ENEMY3_PATH_RECALC_MS_MIN = 2000
+const ENEMY3_PATH_RECALC_MS_MAX = 3000
+const ENEMY3_PAUSE_MS_MIN = 2000
+const ENEMY3_PAUSE_MS_MAX = 4000
+const ENEMY3_BOMB_RANGE = TILE_SIZE * 0.7
+const ENEMY3_BOMB_ATTEMPT_COOLDOWN_MAX_MS = 2000
+const ENEMY3_MAX_BOMBS = 5
+const ENEMY3_HIT_RADIUS = TILE_SIZE * 1.5
+const ENEMY3_HIT_REQUIRED = 2
+const ENEMY3_FLEE_BOMB_RADIUS = TILE_SIZE * 4
+const ENEMY3_FLIP_X_THRESHOLD = 12
 const WAVE2_SPAWN_DELAY_MS = 4000
+const WAVE3_SPAWN_DELAY_MS = 4000
 
 export default class GameScene extends Scene {
     constructor() {
@@ -82,6 +98,8 @@ export default class GameScene extends Scene {
         this.currentWave = 1
         this.wave2SpawnScheduled = false
         this.wave2SpawnTimer = null
+        this.wave3SpawnScheduled = false
+        this.wave3SpawnTimer = null
     }
 
     preload() {
@@ -118,6 +136,10 @@ export default class GameScene extends Scene {
         this.preloadEnemyFrames('enemy2-run', 'sprites/Pirate Bomb/Sprites/4-Enemy-Big Guy/2-Run', 16)
         this.preloadEnemyFrames('enemy2-hit', 'sprites/Pirate Bomb/Sprites/4-Enemy-Big Guy/12-Hit', 8)
         this.preloadEnemyFrames('enemy2-dead-ground', 'sprites/Pirate Bomb/Sprites/4-Enemy-Big Guy/14-Dead Ground', 4)
+        this.preloadEnemyFrames('enemy3-idle', 'sprites/Pirate Bomb/Sprites/3-Enemy-Cucumber/1-Idle', 36)
+        this.preloadEnemyFrames('enemy3-run', 'sprites/Pirate Bomb/Sprites/3-Enemy-Cucumber/2-Run', 12)
+        this.preloadEnemyFrames('enemy3-hit', 'sprites/Pirate Bomb/Sprites/3-Enemy-Cucumber/9-Hit', 8)
+        this.preloadEnemyFrames('enemy3-dead-ground', 'sprites/Pirate Bomb/Sprites/3-Enemy-Cucumber/11-Dead Ground', 4)
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
@@ -457,12 +479,50 @@ export default class GameScene extends Scene {
                 repeat: 0
             })
         }
+
+        if (!this.anims.exists('enemy3-idle')) {
+            this.anims.create({
+                key: 'enemy3-idle',
+                frames: Array.from({ length: 36 }, (_, index) => ({ key: `enemy3-idle-${index + 1}` })),
+                frameRate: 10,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('enemy3-run')) {
+            this.anims.create({
+                key: 'enemy3-run',
+                frames: Array.from({ length: 12 }, (_, index) => ({ key: `enemy3-run-${index + 1}` })),
+                frameRate: 12,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('enemy3-hit')) {
+            this.anims.create({
+                key: 'enemy3-hit',
+                frames: Array.from({ length: 8 }, (_, index) => ({ key: `enemy3-hit-${index + 1}` })),
+                frameRate: 12,
+                repeat: 0
+            })
+        }
+
+        if (!this.anims.exists('enemy3-dead-ground')) {
+            this.anims.create({
+                key: 'enemy3-dead-ground',
+                frames: Array.from({ length: 4 }, (_, index) => ({ key: `enemy3-dead-ground-${index + 1}` })),
+                frameRate: 8,
+                repeat: 0
+            })
+        }
     }
 
     spawnWaveOneEnemies() {
         this.currentWave = 1
         this.wave2SpawnScheduled = false
         this.wave2SpawnTimer = null
+        this.wave3SpawnScheduled = false
+        this.wave3SpawnTimer = null
         for (let i = 0; i < ENEMY1_COUNT_WAVE_1; i += 1) {
             this.spawnEnemy(1)
         }
@@ -472,15 +532,52 @@ export default class GameScene extends Scene {
         this.currentWave = 2
         this.wave2SpawnScheduled = false
         this.wave2SpawnTimer = null
+        this.wave3SpawnScheduled = false
+        this.wave3SpawnTimer = null
         for (let i = 0; i < ENEMY2_COUNT_WAVE_2; i += 1) {
             this.spawnEnemy(2)
         }
     }
 
+    spawnWaveThreeEnemies() {
+        this.currentWave = 3
+        this.wave3SpawnScheduled = false
+        this.wave3SpawnTimer = null
+        for (let i = 0; i < ENEMY3_COUNT_WAVE_3; i += 1) {
+            this.spawnEnemy(3)
+        }
+    }
+
     spawnEnemy(waveNumber) {
-        const isWave2 = waveNumber === 2
-        const stats = isWave2
+        const stats = waveNumber === 3
             ? {
+                wave: 3,
+                chaseSpeed: ENEMY3_CHASE_SPEED,
+                fleeSpeed: ENEMY3_FLEE_SPEED,
+                pathRecalcMsMin: ENEMY3_PATH_RECALC_MS_MIN,
+                pathRecalcMsMax: ENEMY3_PATH_RECALC_MS_MAX,
+                pauseMsMin: ENEMY3_PAUSE_MS_MIN,
+                pauseMsMax: ENEMY3_PAUSE_MS_MAX,
+                bombRange: ENEMY3_BOMB_RANGE,
+                bombAttemptCooldownMaxMs: ENEMY3_BOMB_ATTEMPT_COOLDOWN_MAX_MS,
+                maxBombs: ENEMY3_MAX_BOMBS,
+                hitRadius: ENEMY3_HIT_RADIUS,
+                hitRequired: ENEMY3_HIT_REQUIRED,
+                fleeBombRadius: ENEMY3_FLEE_BOMB_RADIUS,
+                flipXThreshold: ENEMY3_FLIP_X_THRESHOLD,
+                scale: ENEMY3_SCALE,
+                bodySize: { width: 36, height: 42 },
+                bodyOffset: { x: 45, y: 86 },
+                animations: {
+                    idle: 'enemy3-idle',
+                    run: 'enemy3-run',
+                    hit: 'enemy3-hit',
+                    dead: 'enemy3-dead-ground'
+                },
+                spawnTexture: 'enemy3-idle-1'
+            }
+            : waveNumber === 2
+                ? {
                 wave: 2,
                 chaseSpeed: ENEMY2_CHASE_SPEED,
                 fleeSpeed: ENEMY2_FLEE_SPEED,
@@ -506,7 +603,7 @@ export default class GameScene extends Scene {
                 },
                 spawnTexture: 'enemy2-idle-1'
             }
-            : {
+                : {
                 wave: 1,
                 chaseSpeed: ENEMY1_CHASE_SPEED,
                 fleeSpeed: ENEMY1_FLEE_SPEED,
@@ -531,7 +628,7 @@ export default class GameScene extends Scene {
                     dead: 'enemy-dead-ground'
                 },
                 spawnTexture: 'enemy-idle-1'
-            }
+                }
 
         const spawn = this.findRandomFreeCellCenter()
         const sprite = this.physics.add.sprite(spawn.x, spawn.y, stats.spawnTexture)
@@ -1219,6 +1316,8 @@ export default class GameScene extends Scene {
         this.currentWave = 1
         this.wave2SpawnScheduled = false
         this.wave2SpawnTimer = null
+        this.wave3SpawnScheduled = false
+        this.wave3SpawnTimer = null
 
         this.captain.sprite.removeAllListeners()
         this.captain.sprite.setActive(true)
@@ -1472,6 +1571,7 @@ export default class GameScene extends Scene {
             }
             enemy.sprite.destroy()
             this.tryScheduleWaveTwoSpawn()
+            this.tryScheduleWaveThreeSpawn()
         })
     }
 
@@ -1494,6 +1594,28 @@ export default class GameScene extends Scene {
                 return
             }
             this.spawnWaveTwoEnemies()
+        })
+    }
+
+    tryScheduleWaveThreeSpawn() {
+        if (this.wave3SpawnScheduled || this.currentWave !== 2 || this.isGameOver) {
+            return
+        }
+
+        const wave2StillPresent = this.enemies.some(enemy =>
+            enemy.stats.wave === 2 &&
+            (enemy.alive || enemy.sprite?.active)
+        )
+        if (wave2StillPresent) {
+            return
+        }
+
+        this.wave3SpawnScheduled = true
+        this.wave3SpawnTimer = this.time.delayedCall(WAVE3_SPAWN_DELAY_MS, () => {
+            if (this.isGameOver || this.isRestarting) {
+                return
+            }
+            this.spawnWaveThreeEnemies()
         })
     }
 
