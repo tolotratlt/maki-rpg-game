@@ -19,6 +19,9 @@ const singleTileRepeatInput = document.getElementById('single-tile-repeat')
 const undoMapButton = document.getElementById('undo-map')
 const objectControls = document.getElementById('object-controls')
 const objectGrid = document.getElementById('object-grid')
+const objectSourceAssetButton = document.getElementById('object-source-asset')
+const objectSourceTilesetButton = document.getElementById('object-source-tileset')
+const tilesetObjectHelp = document.getElementById('tileset-object-help')
 const modeButtons = {
     paint: document.getElementById('mode-paint'),
     erase: document.getElementById('mode-erase'),
@@ -40,6 +43,7 @@ const state = {
     floor: [],
     collision: [],
     furniture: [],
+    tilesetFurniture: [],
     furnitureImages: new Map(),
     zoom: 1.5,
     showGrid: true,
@@ -48,6 +52,7 @@ const state = {
     repeatSingleTile: false,
     selectedTile: 1,
     selectedFurnitureAsset: '',
+    objectSource: 'asset',
     hoverCell: null,
     undoStack: [],
     tilesetImage: null,
@@ -180,6 +185,10 @@ function syncInputs() {
     gridButton.classList.toggle('active', state.showGrid)
     undoMapButton.disabled = state.undoStack.length === 0
     objectControls.classList.toggle('active', state.mode === 'object')
+    objectSourceAssetButton.classList.toggle('active', state.objectSource === 'asset')
+    objectSourceTilesetButton.classList.toggle('active', state.objectSource === 'tileset')
+    objectGrid.style.display = state.mode === 'object' && state.objectSource === 'asset' ? 'grid' : 'none'
+    tilesetObjectHelp.classList.toggle('active', state.mode === 'object' && state.objectSource === 'tileset')
 }
 
 function updateDocumentTitle() {
@@ -190,6 +199,11 @@ function setMode(mode) {
     state.mode = mode
     syncInputs()
     renderMap()
+}
+
+function setObjectSource(source) {
+    state.objectSource = source
+    syncInputs()
 }
 
 function setBrushSize(nextSize) {
@@ -235,6 +249,9 @@ function createUndoSnapshot() {
         collision: cloneMatrix(state.collision),
         furniture: Array.isArray(state.furniture)
             ? state.furniture.map(item => ({ ...item }))
+            : [],
+        tilesetFurniture: Array.isArray(state.tilesetFurniture)
+            ? state.tilesetFurniture.map(item => ({ ...item }))
             : []
     }
 }
@@ -265,6 +282,7 @@ async function undoMapChange() {
     state.floor = cloneMatrix(snapshot.floor)
     state.collision = cloneMatrix(snapshot.collision)
     state.furniture = snapshot.furniture.map(item => ({ ...item }))
+    state.tilesetFurniture = (snapshot.tilesetFurniture ?? []).map(item => ({ ...item }))
     state.hoverCell = null
     state.hasPendingUndoSnapshot = false
 
@@ -439,20 +457,23 @@ function renderMap() {
         }
     }
 
+    for (const item of state.tilesetFurniture) {
+        drawTilesetObjectBrushPreview(mapContext, item, item.x * state.zoom, item.y * state.zoom, state.zoom)
+    }
+
     for (const item of state.furniture) {
+
         const image = state.furnitureImages.get(item.src)
 
-        if (!image) {
-            continue
+        if (image) {
+            mapContext.drawImage(
+                image,
+                item.x * state.zoom,
+                item.y * state.zoom,
+                item.w * state.zoom,
+                item.h * state.zoom
+            )
         }
-
-        mapContext.drawImage(
-            image,
-            item.x * state.zoom,
-            item.y * state.zoom,
-            item.w * state.zoom,
-            item.h * state.zoom
-        )
     }
 
     for (let row = 0; row < state.mapHeight; row += 1) {
@@ -535,7 +556,7 @@ function ensureFurnitureImage(src) {
 async function preloadFurnitureImages() {
     const sources = new Set([
         ...state.availableFurnitureAssets,
-        ...state.furniture.map(item => item.src)
+        ...state.furniture.map(item => item.src).filter(src => typeof src === 'string')
     ])
 
     await Promise.all([...sources].map(async src => {
@@ -571,6 +592,47 @@ function renderObjectGrid() {
     }
 }
 
+function selectDefaultObjectSource() {
+    if (!state.selectedFurnitureAsset && state.availableFurnitureAssets.length > 0) {
+        state.selectedFurnitureAsset = state.availableFurnitureAssets[0]
+    }
+}
+
+function drawTilesetObjectBrushPreview(context, item, drawX, drawY, zoom = 1) {
+    if (!state.tilesetImage) {
+        return
+    }
+
+    const originTileId = item.tileId ?? state.selectedTile
+    const brushWidth = item.brushWidth ?? getSelectedBrushDimensions().width
+    const brushHeight = item.brushHeight ?? getSelectedBrushDimensions().height
+    const repeatSingleTile = item.repeatSingleTile ?? state.repeatSingleTile
+    const originZeroBased = Math.max(0, originTileId - 1)
+    const originCol = originZeroBased % state.tilesetColumns
+    const originRow = Math.floor(originZeroBased / state.tilesetColumns)
+
+    for (let row = 0; row < brushHeight; row += 1) {
+        for (let col = 0; col < brushWidth; col += 1) {
+            const tileCol = repeatSingleTile ? originCol : originCol + col
+            const tileRow = repeatSingleTile ? originRow : originRow + row
+            const tileId = tileRow * state.tilesetColumns + tileCol + 1
+            const { sx, sy } = getTileSourceRect(tileId)
+
+            context.drawImage(
+                state.tilesetImage,
+                sx,
+                sy,
+                state.tileSize,
+                state.tileSize,
+                drawX + col * state.tileSize * zoom,
+                drawY + row * state.tileSize * zoom,
+                state.tileSize * zoom,
+                state.tileSize * zoom
+            )
+        }
+    }
+}
+
 function populateSelect(select, values, placeholder = '') {
     select.innerHTML = ''
 
@@ -601,13 +663,17 @@ async function loadBootstrap() {
         state.tilesetPath = state.availableTilesets[0]
     }
 
-    if (!state.selectedFurnitureAsset && state.availableFurnitureAssets.length > 0) {
-        state.selectedFurnitureAsset = state.availableFurnitureAssets[0]
-    }
+    selectDefaultObjectSource()
 }
 
 async function loadMap(name) {
     const payload = await fetchJson(`${mapApiBase}/${encodeURIComponent(name)}`)
+    const rawFurniture = Array.isArray(payload.layers?.furniture) ? payload.layers.furniture : []
+    const imageFurniture = rawFurniture.filter(item => typeof item?.src === 'string')
+    const legacyTilesetFurniture = rawFurniture.filter(item => item?.kind === 'tileset')
+    const customTilesetFurniture = Array.isArray(payload.custom?.tilesetFurniture)
+        ? payload.custom.tilesetFurniture
+        : []
     state.mapName = payload.name || name
     state.tilesetPath = payload.tileset
     state.tileSize = Number(payload.tileSize || 32)
@@ -615,7 +681,8 @@ async function loadMap(name) {
     state.mapHeight = Number(payload.mapHeight || 1)
     state.floor = normalizeFloorGrid(payload.layers?.floor, state.mapWidth, state.mapHeight)
     state.collision = normalizeCollisionGrid(payload.collisions, state.mapWidth, state.mapHeight, state.tileSize)
-    state.furniture = Array.isArray(payload.layers?.furniture) ? payload.layers.furniture : []
+    state.furniture = imageFurniture
+    state.tilesetFurniture = customTilesetFurniture.length > 0 ? customTilesetFurniture : legacyTilesetFurniture
     state.hoverCell = null
     state.undoStack = []
     state.hasPendingUndoSnapshot = false
@@ -636,6 +703,7 @@ function createNewMap() {
     state.floor = createFloorGrid(state.mapWidth, state.mapHeight, 0)
     state.collision = createCollisionGrid(state.mapWidth, state.mapHeight)
     state.furniture = []
+    state.tilesetFurniture = []
     state.furnitureImages = new Map()
     state.hoverCell = null
     updateDocumentTitle()
@@ -691,6 +759,9 @@ async function saveMap() {
         layers: {
             floor: state.floor,
             furniture: state.furniture
+        },
+        custom: {
+            tilesetFurniture: state.tilesetFurniture
         },
         collisions: collisionGridToRects(state.collision, state.tileSize)
     }
@@ -752,6 +823,16 @@ function removeTopFurnitureAtCell(row, col) {
         }
     }
 
+    for (let index = state.tilesetFurniture.length - 1; index >= 0; index -= 1) {
+        const item = state.tilesetFurniture[index]
+        const bounds = getFurnitureBounds(item)
+
+        if (worldX >= bounds.left && worldX <= bounds.right && worldY >= bounds.top && worldY <= bounds.bottom) {
+            state.tilesetFurniture.splice(index, 1)
+            return true
+        }
+    }
+
     return false
 }
 
@@ -762,6 +843,44 @@ function applyBrush(cell, options = {}) {
 
     const eraseCollision = options.eraseCollision === true
 
+    if (state.mode === 'object') {
+        if (eraseCollision) {
+            removeTopFurnitureAtCell(cell.row, cell.col)
+        } else if (state.objectSource === 'tileset') {
+            const dimensions = getSelectedBrushDimensions()
+
+            state.tilesetFurniture.push({
+                kind: 'tileset',
+                tileId: state.selectedTile,
+                brushWidth: dimensions.width,
+                brushHeight: dimensions.height,
+                repeatSingleTile: state.repeatSingleTile,
+                x: cell.col * state.tileSize,
+                y: cell.row * state.tileSize,
+                w: dimensions.width * state.tileSize,
+                h: dimensions.height * state.tileSize
+            })
+        } else {
+            const image = state.furnitureImages.get(state.selectedFurnitureAsset)
+
+            if (!image || !state.selectedFurnitureAsset) {
+                return
+            }
+
+            state.furniture.push({
+                src: state.selectedFurnitureAsset,
+                x: cell.col * state.tileSize,
+                y: cell.row * state.tileSize,
+                w: image.naturalWidth,
+                h: image.naturalHeight
+            })
+        }
+
+        renderTileset()
+        renderMap()
+        return
+    }
+
     for (let row = cell.row; row < Math.min(state.mapHeight, cell.row + state.brushSize); row += 1) {
         for (let col = cell.col; col < Math.min(state.mapWidth, cell.col + state.brushSize); col += 1) {
             if (state.mode === 'paint') {
@@ -770,24 +889,6 @@ function applyBrush(cell, options = {}) {
                 state.floor[row][col] = 0
             } else if (state.mode === 'collision') {
                 state.collision[row][col] = !eraseCollision
-            } else if (state.mode === 'object') {
-                if (eraseCollision) {
-                    removeTopFurnitureAtCell(row, col)
-                } else {
-                    const image = state.furnitureImages.get(state.selectedFurnitureAsset)
-
-                    if (!image || !state.selectedFurnitureAsset) {
-                        continue
-                    }
-
-                    state.furniture.push({
-                        src: state.selectedFurnitureAsset,
-                        x: col * state.tileSize,
-                        y: row * state.tileSize,
-                        w: image.naturalWidth,
-                        h: image.naturalHeight
-                    })
-                }
             } else if (state.mode === 'picker') {
                 state.selectedTile = state.floor[row][col] || state.selectedTile
                 renderTileset()
@@ -913,6 +1014,8 @@ function bindEvents() {
         renderTileset()
         renderMap()
     })
+    objectSourceAssetButton.addEventListener('click', () => setObjectSource('asset'))
+    objectSourceTilesetButton.addEventListener('click', () => setObjectSource('tileset'))
 
     tilesetSelect.addEventListener('change', async () => {
         state.tilesetPath = tilesetSelect.value

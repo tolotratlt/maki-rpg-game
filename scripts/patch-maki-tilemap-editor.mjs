@@ -306,7 +306,10 @@ mapCanvas.addEventListener('mouseleave', () => {
     )
   }
 
-  if (next === source && (nextLauncher === launcherSource || nextLauncher === null)) {
+  if (
+    next === source &&
+    (nextLauncher === launcherSource || nextLauncher === null)
+  ) {
     console.log('Maki tilemap patches already applied')
     return
   }

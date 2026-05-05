@@ -28,6 +28,7 @@ export default class GameScene extends Scene {
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.isCaptainHit = false
+        this.mapFurnitureSprites = []
         this.spaceKey = null
     }
 
@@ -55,6 +56,7 @@ export default class GameScene extends Scene {
     create() {
         super.create()
         manager.create(this)
+        this.createTilesetFurnitureLayer('default_map')
 
         this.physics.world.setBounds(0, 0, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE)
         this.cameras.main.setBounds(0, 0, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE)
@@ -223,6 +225,44 @@ export default class GameScene extends Scene {
                 repeat: 0
             })
         }
+    }
+
+    createTilesetFurnitureLayer(mapName) {
+        const mapData = this.cache.json.get(mapName)
+        const customFurniture = mapData?.custom?.tilesetFurniture ?? []
+        const legacyFurniture = (mapData?.layers?.furniture ?? []).filter(item => item?.kind === 'tileset')
+        const furniture = customFurniture.length > 0 ? customFurniture : legacyFurniture
+
+        furniture
+            .filter(item => item.kind === 'tileset')
+            .forEach(item => {
+                const brushWidth = item.brushWidth ?? 1
+                const brushHeight = item.brushHeight ?? 1
+                const repeatSingleTile = item.repeatSingleTile === true
+                const originTileId = Math.max(1, item.tileId ?? 1)
+                const originZeroBased = originTileId - 1
+                const tilesetCols = Math.floor(this.textures.get(`${mapName}_tileset`).getSourceImage().width / TILE_SIZE)
+                const originCol = originZeroBased % tilesetCols
+                const originRow = Math.floor(originZeroBased / tilesetCols)
+
+                for (let row = 0; row < brushHeight; row += 1) {
+                    for (let col = 0; col < brushWidth; col += 1) {
+                        const tileCol = repeatSingleTile ? originCol : originCol + col
+                        const tileRow = repeatSingleTile ? originRow : originRow + row
+                        const tileId = tileRow * tilesetCols + tileCol + 1
+                        const sprite = this.add.image(
+                            item.x + col * TILE_SIZE,
+                            item.y + row * TILE_SIZE,
+                            `${mapName}_tileset`,
+                            tileId - 1
+                        )
+
+                        sprite.setOrigin(0, 0)
+                        sprite.setDepth(1)
+                        this.mapFurnitureSprites.push(sprite)
+                    }
+                }
+            })
     }
 
     configureMoveAnimationTempo() {
