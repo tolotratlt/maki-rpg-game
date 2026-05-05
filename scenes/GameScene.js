@@ -15,7 +15,7 @@ const BOMB_FRAME_WIDTH = 96
 const BOMB_FRAME_HEIGHT = 108
 const BOMB_TICK_FRAME_RATE = 10 / SECONDS_PER_BEAT
 const BOMB_EXPLOSION_FRAME_RATE = 9 / SECONDS_PER_BEAT
-const BOMB_FUSE_BEATS = [1, 2, 3]
+const BOMB_FUSE_BEATS = [1.5, 2, 3]
 const BOMB_DROP_COOLDOWN_MS = SECONDS_PER_BEAT * 250
 const CAPTAIN_HIT_RADIUS = TILE_SIZE * 1.5
 const BOMB_KICK_SPEED = TILE_SIZE * 9
@@ -28,9 +28,12 @@ export default class GameScene extends Scene {
         this.bombs = null
         this.captain = null
         this.hud = null
+        this.gameOverText = null
         this.startButton = null
         this.replayButton = null
         this.isGameStarted = false
+        this.isGameOver = false
+        this.hp = 99
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.isCaptainHit = false
@@ -106,17 +109,27 @@ export default class GameScene extends Scene {
 
         this.hud = this.add.text(14, 14, '', {
             fontFamily: 'monospace',
-            fontSize: '12px',
+            fontSize: '22px',
             color: '#fff7d6',
             backgroundColor: '#19311fcc',
             padding: { x: 8, y: 6 }
         })
+        this.hud.setOrigin(0.5, 0.5)
+        this.hud.setPosition(this.scale.width / 2, this.scale.height / 2 + 120)
         this.hud.setScrollFactor(0)
-        this.hud.setDepth(100)
-        this.hud.setText([
-            'Captain Clown Nose',
-            'Click Play to start'
-        ])
+        this.hud.setDepth(210)
+        this.hud.setText(`HP: ${this.hp}`)
+        this.gameOverText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'GAME OVER', {
+            fontFamily: 'monospace',
+            fontSize: '40px',
+            color: '#ffe5e5',
+            backgroundColor: '#3a1111dd',
+            padding: { x: 18, y: 12 }
+        })
+        this.gameOverText.setOrigin(0.5, 0.5)
+        this.gameOverText.setScrollFactor(0)
+        this.gameOverText.setDepth(1200)
+        this.gameOverText.setVisible(false)
         this.createStartButton()
         this.createReplayButton()
     }
@@ -127,6 +140,12 @@ export default class GameScene extends Scene {
         }
 
         if (!this.isGameStarted) {
+            this.hud.setText(`HP: ${this.hp}`)
+            return
+        }
+
+        if (this.isGameOver) {
+            this.hud.setText(`HP: ${this.hp}`)
             return
         }
 
@@ -136,12 +155,7 @@ export default class GameScene extends Scene {
         this.updateBombDepths()
         this.handleBombInput()
 
-        const { x, y } = this.captain.sprite
-        this.hud.setText([
-            'Captain Clown Nose',
-            'Fleches ou WASD/ZQSD, Espace',
-            `Position: ${Math.round(x)}, ${Math.round(y)}`
-        ])
+        this.hud.setText(`HP: ${this.hp}`)
     }
 
     _getConfig() {
@@ -394,6 +408,8 @@ export default class GameScene extends Scene {
 
     resetRunState() {
         this.isGameStarted = false
+        this.isGameOver = false
+        this.hp = 99
         this.isCaptainHit = false
         this.isCaptainJumping = false
         this.lastHorizontalDirection = 'right'
@@ -641,7 +657,7 @@ export default class GameScene extends Scene {
     }
 
     handleCaptainBombHit(explosionX, explosionY) {
-        if (this.isCaptainHit || !this.captain?.sprite) {
+        if (this.isCaptainHit || this.isGameOver || !this.captain?.sprite) {
             return
         }
 
@@ -653,6 +669,12 @@ export default class GameScene extends Scene {
         )
 
         if (distance > CAPTAIN_HIT_RADIUS) {
+            return
+        }
+
+        this.hp = Math.max(0, this.hp - 33)
+        if (this.hp === 0) {
+            this.triggerGameOver()
             return
         }
 
@@ -670,6 +692,15 @@ export default class GameScene extends Scene {
             this.captain.sprite.setFlipX(false)
             this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
         })
+    }
+
+    triggerGameOver() {
+        this.isGameOver = true
+        this.isCaptainHit = false
+        this.isCaptainJumping = false
+        this.captain.sprite.setVelocity(0, 0)
+        this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
+        this.gameOverText?.setVisible(true)
     }
 
     setupBackgroundMusic() {
