@@ -26,6 +26,7 @@ export default class GameScene extends Scene {
         this.captain = null
         this.hud = null
         this.startButton = null
+        this.replayButton = null
         this.isGameStarted = false
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
@@ -51,12 +52,15 @@ export default class GameScene extends Scene {
             frameHeight: BOMB_FRAME_HEIGHT
         })
         this.load.image('play-button', 'sprites/ui/play2x-1.png')
+        this.load.image('replay-button', 'sprites/ui/repeat.png')
+        this.load.image('replay-button-hover', 'sprites/ui/repeat-hover.png')
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
     }
 
     create() {
+        this.resetRunState()
         super.create()
         manager.create(this)
         this.createTilesetFurnitureLayer('default_map')
@@ -71,6 +75,8 @@ export default class GameScene extends Scene {
         this.captain.sprite.setCollideWorldBounds(true)
         this.captain.sprite.body.setSize(24, 20)
         this.captain.sprite.body.setOffset(20, 18)
+        this.captain.sprite.setDepth(1)
+        this.placeCaptainAtRandomSafeSpawn('default_map')
 
         this.captain.keys = this.createMergedMovementKeys()
         this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
@@ -104,6 +110,7 @@ export default class GameScene extends Scene {
             'Click Play to start'
         ])
         this.createStartButton()
+        this.createReplayButton()
     }
 
     update() {
@@ -292,10 +299,29 @@ export default class GameScene extends Scene {
 
         this.startButton = this.add.image(this.scale.width / 2, this.scale.height / 2, 'play-button')
         this.startButton.setScrollFactor(0)
-        this.startButton.setDepth(200)
+        this.startButton.setDepth(1000)
         this.startButton.setInteractive({ useHandCursor: true })
         this.startButton.on('pointerdown', () => {
             this.startGame()
+        })
+    }
+
+    createReplayButton() {
+        this.replayButton = this.add.image(this.scale.width / 2 + 200, this.scale.height / 2 - 145, 'replay-button')
+        this.replayButton.setOrigin(0.5, 0.5)
+        this.replayButton.setScale(0.5)
+        this.replayButton.setScrollFactor(0)
+        this.replayButton.setDepth(210)
+        this.replayButton.setVisible(false)
+        this.replayButton.disableInteractive()
+        this.replayButton.on('pointerover', () => {
+            this.replayButton.setTexture('replay-button-hover')
+        })
+        this.replayButton.on('pointerout', () => {
+            this.replayButton.setTexture('replay-button')
+        })
+        this.replayButton.on('pointerdown', () => {
+            this.scene.restart()
         })
     }
 
@@ -307,9 +333,24 @@ export default class GameScene extends Scene {
         this.isGameStarted = true
         this.startButton?.destroy()
         this.startButton = null
+        if (this.replayButton) {
+            this.replayButton.setVisible(true)
+            this.replayButton.setTexture('replay-button')
+            this.replayButton.setInteractive({ useHandCursor: true })
+        }
         this.captain.sprite.anims.resume()
         this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
         this.startBackgroundMusic()
+    }
+
+    resetRunState() {
+        this.isGameStarted = false
+        this.isCaptainHit = false
+        this.lastHorizontalDirection = 'right'
+        this.lastBombDropAt = 0
+        this.startButton = null
+        this.replayButton = null
+        this.mapFurnitureSprites = []
     }
 
     configureMoveAnimationTempo() {
@@ -332,6 +373,53 @@ export default class GameScene extends Scene {
                 repeat: -1
             })
         })
+    }
+
+    placeCaptainAtRandomSafeSpawn(mapName) {
+        const mapData = this.cache.json.get(mapName)
+        const collisions = Array.isArray(mapData?.collisions) ? mapData.collisions : []
+        const candidates = []
+
+        for (let row = 1; row < MAP_HEIGHT - 1; row += 1) {
+            for (let col = 1; col < MAP_WIDTH - 1; col += 1) {
+                candidates.push({
+                    x: col * TILE_SIZE + TILE_SIZE / 2,
+                    y: row * TILE_SIZE + TILE_SIZE / 2
+                })
+            }
+        }
+
+        Phaser.Utils.Array.Shuffle(candidates)
+        for (const candidate of candidates) {
+            if (!this.isCaptainPositionColliding(candidate.x, candidate.y, collisions)) {
+                this.captain.sprite.setPosition(candidate.x, candidate.y)
+                this.captain.sprite.body?.updateFromGameObject?.()
+                return
+            }
+        }
+
+        this.captain.sprite.setPosition(TILE_SIZE * 4, TILE_SIZE * 4)
+        this.captain.sprite.body?.updateFromGameObject?.()
+    }
+
+    isCaptainPositionColliding(x, y, collisionRects) {
+        this.captain.sprite.setPosition(x, y)
+        this.captain.sprite.body?.updateFromGameObject?.()
+        const body = this.captain.sprite.body
+
+        if (!body) {
+            return false
+        }
+
+        const playerRect = new Phaser.Geom.Rectangle(body.left, body.top, body.width, body.height)
+        for (const rect of collisionRects) {
+            const collisionRect = new Phaser.Geom.Rectangle(rect.x, rect.y, rect.w, rect.h)
+            if (Phaser.Geom.Intersects.RectangleToRectangle(playerRect, collisionRect)) {
+                return true
+            }
+        }
+
+        return false
     }
 
     createBombAnimations() {

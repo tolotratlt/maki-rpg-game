@@ -1077,11 +1077,11 @@
         72,
         72,
         72,
-        72,
-        72,
-        72,
-        72,
-        72,
+        213,
+        214,
+        214,
+        214,
+        215,
         72,
         72,
         72,
@@ -1268,6 +1268,109 @@
       ]
     ],
     "furniture": []
+  },
+  "custom": {
+    "tilesetFurniture": [
+      {
+        "kind": "tileset",
+        "tileId": 267,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 768,
+        "y": 352,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "kind": "tileset",
+        "tileId": 209,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 704,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "kind": "tileset",
+        "tileId": 209,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 96,
+        "y": 480,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "kind": "tileset",
+        "tileId": 209,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 96,
+        "y": 160,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "kind": "tileset",
+        "tileId": 209,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 992,
+        "y": 640,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "kind": "tileset",
+        "tileId": 209,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 416,
+        "y": 672,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "kind": "tileset",
+        "tileId": 209,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 1120,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "kind": "tileset",
+        "tileId": 209,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 64,
+        "y": 736,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "kind": "tileset",
+        "tileId": 269,
+        "brushWidth": 2,
+        "brushHeight": 2,
+        "repeatSingleTile": false,
+        "x": 480,
+        "y": 448,
+        "w": 64,
+        "h": 64
+      }
+    ]
   },
   "collisions": [
     {
@@ -1653,109 +1756,36 @@
       "y": 768,
       "w": 32,
       "h": 32
+    },
+    {
+      "x": 640,
+      "y": 800,
+      "w": 32,
+      "h": 32
+    },
+    {
+      "x": 672,
+      "y": 800,
+      "w": 32,
+      "h": 32
+    },
+    {
+      "x": 704,
+      "y": 800,
+      "w": 32,
+      "h": 32
+    },
+    {
+      "x": 736,
+      "y": 800,
+      "w": 32,
+      "h": 32
+    },
+    {
+      "x": 768,
+      "y": 800,
+      "w": 32,
+      "h": 32
     }
-  ],
-  "custom": {
-    "tilesetFurniture": [
-      {
-        "kind": "tileset",
-        "tileId": 267,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 768,
-        "y": 352,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "kind": "tileset",
-        "tileId": 209,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 704,
-        "y": 192,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "kind": "tileset",
-        "tileId": 209,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 96,
-        "y": 480,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "kind": "tileset",
-        "tileId": 209,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 96,
-        "y": 160,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "kind": "tileset",
-        "tileId": 209,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 992,
-        "y": 640,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "kind": "tileset",
-        "tileId": 209,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 416,
-        "y": 672,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "kind": "tileset",
-        "tileId": 209,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 1120,
-        "y": 64,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "kind": "tileset",
-        "tileId": 209,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 64,
-        "y": 736,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "kind": "tileset",
-        "tileId": 269,
-        "brushWidth": 2,
-        "brushHeight": 2,
-        "repeatSingleTile": false,
-        "x": 480,
-        "y": 448,
-        "w": 64,
-        "h": 64
-      }
-    ]
-  }
+  ]
 }
