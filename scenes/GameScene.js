@@ -11,6 +11,7 @@ const MOVE_FRAME_RATE = 6 / SECONDS_PER_BEAT
 const IDLE_FRAME_RATE = 5 / SECONDS_PER_BEAT
 const HIT_FRAME_RATE = 4 / SECONDS_PER_BEAT
 const JUMP_FRAME_RATE = 3 / SECONDS_PER_BEAT
+const DEAD_GROUND_FRAME_RATE = 4 / SECONDS_PER_BEAT
 const BOMB_FRAME_WIDTH = 96
 const BOMB_FRAME_HEIGHT = 108
 const BOMB_TICK_FRAME_RATE = 10 / SECONDS_PER_BEAT
@@ -60,6 +61,10 @@ export default class GameScene extends Scene {
         this.load.image('captain-jump-1', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/03-Jump/Jump 01.png')
         this.load.image('captain-jump-2', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/03-Jump/Jump 02.png')
         this.load.image('captain-jump-3', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/03-Jump/Jump 03.png')
+        this.load.image('captain-dead-ground-1', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/08-Dead Ground/Dead Ground 01.png')
+        this.load.image('captain-dead-ground-2', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/08-Dead Ground/Dead Ground 02.png')
+        this.load.image('captain-dead-ground-3', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/08-Dead Ground/Dead Ground 03.png')
+        this.load.image('captain-dead-ground-4', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/08-Dead Ground/Dead Ground 04.png')
         this.load.spritesheet('pirate-bomb', 'sprites/pirate-bomb-spritesheet.png', {
             frameWidth: BOMB_FRAME_WIDTH,
             frameHeight: BOMB_FRAME_HEIGHT
@@ -99,6 +104,7 @@ export default class GameScene extends Scene {
         this.createIdleAnimations()
         this.createHitAnimation()
         this.createJumpAnimation()
+        this.createDeadGroundAnimation()
         this.createBombAnimations()
         this.captain.sprite.play('captain-idle-right')
         this.setupBackgroundMusic()
@@ -302,6 +308,22 @@ export default class GameScene extends Scene {
                     { key: 'captain-jump-3' }
                 ],
                 frameRate: JUMP_FRAME_RATE,
+                repeat: 0
+            })
+        }
+    }
+
+    createDeadGroundAnimation() {
+        if (!this.anims.exists('captain-dead-ground')) {
+            this.anims.create({
+                key: 'captain-dead-ground',
+                frames: [
+                    { key: 'captain-dead-ground-1' },
+                    { key: 'captain-dead-ground-2' },
+                    { key: 'captain-dead-ground-3' },
+                    { key: 'captain-dead-ground-4' }
+                ],
+                frameRate: DEAD_GROUND_FRAME_RATE,
                 repeat: 0
             })
         }
@@ -723,7 +745,7 @@ export default class GameScene extends Scene {
         this.isCaptainHit = false
         this.isCaptainJumping = false
         this.captain.sprite.setVelocity(0, 0)
-        this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
+        this.captain.sprite.play('captain-dead-ground', true)
         this.gameOverText?.setVisible(true)
     }
 
