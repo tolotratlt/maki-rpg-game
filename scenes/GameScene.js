@@ -65,7 +65,6 @@ export default class GameScene extends Scene {
         this.captain.speed = 185
         this.captain.sprite.setPosition(TILE_SIZE * 4, TILE_SIZE * 4)
         this.captain.sprite.setScale(1.35)
-        this.captain.sprite.setDepth(10)
         this.captain.sprite.setCollideWorldBounds(true)
         this.captain.sprite.body.setSize(24, 20)
         this.captain.sprite.body.setOffset(20, 18)
@@ -105,6 +104,7 @@ export default class GameScene extends Scene {
         }
 
         this.moveCaptain()
+        this.updateSceneDepths()
         this.handleBombInput()
 
         const { x, y } = this.captain.sprite
@@ -258,11 +258,20 @@ export default class GameScene extends Scene {
                         )
 
                         sprite.setOrigin(0, 0)
-                        sprite.setDepth(1)
+                        sprite.setDepth(sprite.y + TILE_SIZE)
                         this.mapFurnitureSprites.push(sprite)
                     }
                 }
             })
+    }
+
+    updateSceneDepths() {
+        if (!this.captain?.sprite) {
+            return
+        }
+
+        const captainDepth = this.captain.sprite.body?.bottom ?? this.captain.sprite.y
+        this.captain.sprite.setDepth(captainDepth)
     }
 
     configureMoveAnimationTempo() {
