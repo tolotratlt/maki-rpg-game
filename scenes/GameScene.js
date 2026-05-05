@@ -70,6 +70,23 @@ const ENEMY3_FLEE_BOMB_RADIUS = TILE_SIZE * 4
 const ENEMY3_FLIP_X_THRESHOLD = 12
 const WAVE2_SPAWN_DELAY_MS = 4000
 const WAVE3_SPAWN_DELAY_MS = 4000
+const BOSS_COUNT = 1
+const BOSS_CHASE_SPEED = 120
+const BOSS_FLEE_SPEED = 165
+const BOSS_SCALE = 0.72
+const BOSS_PATH_RECALC_MS_MIN = 2000
+const BOSS_PATH_RECALC_MS_MAX = 3000
+const BOSS_PAUSE_MS_MIN = 2000
+const BOSS_PAUSE_MS_MAX = 4000
+const BOSS_BOMB_RANGE = TILE_SIZE * 1.4
+const BOSS_BOMB_ATTEMPT_COOLDOWN_MAX_MS = 2000
+const BOSS_MAX_BOMBS = 6
+const BOSS_HIT_RADIUS = TILE_SIZE * 1.5
+const BOSS_HIT_REQUIRED = 4
+const BOSS_FLEE_BOMB_RADIUS = TILE_SIZE * 4
+const BOSS_FLIP_X_THRESHOLD = 12
+const BOSS_BURST_LIMIT = 6
+const BOSS_SPAWN_DELAY_MS = 4000
 
 export default class GameScene extends Scene {
     constructor() {
@@ -100,6 +117,9 @@ export default class GameScene extends Scene {
         this.wave2SpawnTimer = null
         this.wave3SpawnScheduled = false
         this.wave3SpawnTimer = null
+        this.bossSpawnScheduled = false
+        this.bossSpawnTimer = null
+        this.nextBombId = 1
     }
 
     preload() {
@@ -140,6 +160,10 @@ export default class GameScene extends Scene {
         this.preloadEnemyFrames('enemy3-run', 'sprites/Pirate Bomb/Sprites/3-Enemy-Cucumber/2-Run', 12)
         this.preloadEnemyFrames('enemy3-hit', 'sprites/Pirate Bomb/Sprites/3-Enemy-Cucumber/9-Hit', 8)
         this.preloadEnemyFrames('enemy3-dead-ground', 'sprites/Pirate Bomb/Sprites/3-Enemy-Cucumber/11-Dead Ground', 4)
+        this.preloadEnemyFrames('boss-idle', 'sprites/Pirate Bomb/Sprites/5-Enemy-Captain/1-Idle', 32)
+        this.preloadEnemyFrames('boss-run', 'sprites/Pirate Bomb/Sprites/5-Enemy-Captain/2-Run', 14)
+        this.preloadEnemyFrames('boss-hit', 'sprites/Pirate Bomb/Sprites/5-Enemy-Captain/9-Hit', 8)
+        this.preloadEnemyFrames('boss-dead-ground', 'sprites/Pirate Bomb/Sprites/5-Enemy-Captain/11-Dead Ground', 4)
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
@@ -515,6 +539,42 @@ export default class GameScene extends Scene {
                 repeat: 0
             })
         }
+
+        if (!this.anims.exists('boss-idle')) {
+            this.anims.create({
+                key: 'boss-idle',
+                frames: Array.from({ length: 32 }, (_, index) => ({ key: `boss-idle-${index + 1}` })),
+                frameRate: 10,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('boss-run')) {
+            this.anims.create({
+                key: 'boss-run',
+                frames: Array.from({ length: 14 }, (_, index) => ({ key: `boss-run-${index + 1}` })),
+                frameRate: 12,
+                repeat: -1
+            })
+        }
+
+        if (!this.anims.exists('boss-hit')) {
+            this.anims.create({
+                key: 'boss-hit',
+                frames: Array.from({ length: 8 }, (_, index) => ({ key: `boss-hit-${index + 1}` })),
+                frameRate: 12,
+                repeat: 0
+            })
+        }
+
+        if (!this.anims.exists('boss-dead-ground')) {
+            this.anims.create({
+                key: 'boss-dead-ground',
+                frames: Array.from({ length: 4 }, (_, index) => ({ key: `boss-dead-ground-${index + 1}` })),
+                frameRate: 8,
+                repeat: 0
+            })
+        }
     }
 
     spawnWaveOneEnemies() {
@@ -523,6 +583,8 @@ export default class GameScene extends Scene {
         this.wave2SpawnTimer = null
         this.wave3SpawnScheduled = false
         this.wave3SpawnTimer = null
+        this.bossSpawnScheduled = false
+        this.bossSpawnTimer = null
         for (let i = 0; i < ENEMY1_COUNT_WAVE_1; i += 1) {
             this.spawnEnemy(1)
         }
@@ -534,6 +596,8 @@ export default class GameScene extends Scene {
         this.wave2SpawnTimer = null
         this.wave3SpawnScheduled = false
         this.wave3SpawnTimer = null
+        this.bossSpawnScheduled = false
+        this.bossSpawnTimer = null
         for (let i = 0; i < ENEMY2_COUNT_WAVE_2; i += 1) {
             this.spawnEnemy(2)
         }
@@ -543,13 +607,53 @@ export default class GameScene extends Scene {
         this.currentWave = 3
         this.wave3SpawnScheduled = false
         this.wave3SpawnTimer = null
+        this.bossSpawnScheduled = false
+        this.bossSpawnTimer = null
         for (let i = 0; i < ENEMY3_COUNT_WAVE_3; i += 1) {
             this.spawnEnemy(3)
         }
     }
 
+    spawnBoss() {
+        this.currentWave = 4
+        this.bossSpawnScheduled = false
+        this.bossSpawnTimer = null
+        for (let i = 0; i < BOSS_COUNT; i += 1) {
+            this.spawnEnemy(4)
+        }
+    }
+
     spawnEnemy(waveNumber) {
-        const stats = waveNumber === 3
+        const stats = waveNumber === 4
+            ? {
+                wave: 4,
+                chaseSpeed: BOSS_CHASE_SPEED,
+                fleeSpeed: BOSS_FLEE_SPEED,
+                pathRecalcMsMin: BOSS_PATH_RECALC_MS_MIN,
+                pathRecalcMsMax: BOSS_PATH_RECALC_MS_MAX,
+                pauseMsMin: BOSS_PAUSE_MS_MIN,
+                pauseMsMax: BOSS_PAUSE_MS_MAX,
+                bombRange: BOSS_BOMB_RANGE,
+                bombAttemptCooldownMaxMs: BOSS_BOMB_ATTEMPT_COOLDOWN_MAX_MS,
+                maxBombs: BOSS_MAX_BOMBS,
+                hitRadius: BOSS_HIT_RADIUS,
+                hitRequired: BOSS_HIT_REQUIRED,
+                fleeBombRadius: BOSS_FLEE_BOMB_RADIUS,
+                flipXThreshold: BOSS_FLIP_X_THRESHOLD,
+                scale: BOSS_SCALE,
+                pushBombOnAttack: true,
+                bossBurstLimit: BOSS_BURST_LIMIT,
+                bodySize: { width: 36, height: 42 },
+                bodyOffset: { x: 45, y: 86 },
+                animations: {
+                    idle: 'boss-idle',
+                    run: 'boss-run',
+                    hit: 'boss-hit',
+                    dead: 'boss-dead-ground'
+                },
+                spawnTexture: 'boss-idle-1'
+            }
+            : waveNumber === 3
             ? {
                 wave: 3,
                 chaseSpeed: ENEMY3_CHASE_SPEED,
@@ -566,6 +670,7 @@ export default class GameScene extends Scene {
                 fleeBombRadius: ENEMY3_FLEE_BOMB_RADIUS,
                 flipXThreshold: ENEMY3_FLIP_X_THRESHOLD,
                 scale: ENEMY3_SCALE,
+                pushBombOnAttack: false,
                 bodySize: { width: 36, height: 42 },
                 bodyOffset: { x: 45, y: 86 },
                 animations: {
@@ -593,6 +698,7 @@ export default class GameScene extends Scene {
                 fleeBombRadius: ENEMY2_FLEE_BOMB_RADIUS,
                 flipXThreshold: ENEMY2_FLIP_X_THRESHOLD,
                 scale: ENEMY2_SCALE,
+                pushBombOnAttack: false,
                 bodySize: { width: 36, height: 42 },
                 bodyOffset: { x: 45, y: 86 },
                 animations: {
@@ -619,6 +725,7 @@ export default class GameScene extends Scene {
                 fleeBombRadius: ENEMY1_FLEE_BOMB_RADIUS,
                 flipXThreshold: ENEMY1_FLIP_X_THRESHOLD,
                 scale: ENEMY1_SCALE,
+                pushBombOnAttack: false,
                 bodySize: { width: 36, height: 42 },
                 bodyOffset: { x: 45, y: 86 },
                 animations: {
@@ -657,7 +764,9 @@ export default class GameScene extends Scene {
             nextPathAt: this.time.now,
             nextBombAttemptAt: this.time.now + Phaser.Math.Between(0, stats.bombAttemptCooldownMaxMs),
             path: [],
-            facing: 1
+            facing: 1,
+            bossBurstCount: 0,
+            bossFirstBombId: null
         }
 
         this.enemies.push(enemy)
@@ -794,6 +903,13 @@ export default class GameScene extends Scene {
         }
 
         enemy.nextBombAttemptAt = now + Phaser.Math.Between(0, enemy.stats.bombAttemptCooldownMaxMs)
+        if (enemy.stats.wave === 4 && enemy.bossBurstCount >= enemy.stats.bossBurstLimit) {
+            if (this.isBombActiveById(enemy.bossFirstBombId)) {
+                return
+            }
+            enemy.bossBurstCount = 0
+            enemy.bossFirstBombId = null
+        }
         const distanceToPlayer = Phaser.Math.Distance.Between(
             enemy.sprite.x,
             enemy.sprite.y,
@@ -812,7 +928,28 @@ export default class GameScene extends Scene {
         }
 
         enemy.bombCount -= 1
-        this.dropBombFromOwner(bombCellX, bombCellY, { type: 'enemy', id: enemy.id })
+        const bomb = this.dropBombFromOwner(bombCellX, bombCellY, { type: 'enemy', id: enemy.id })
+        if (!bomb) {
+            return
+        }
+
+        if (enemy.stats.wave === 4) {
+            if (enemy.bossBurstCount === 0) {
+                enemy.bossFirstBombId = bomb.getData('bombId')
+            }
+            enemy.bossBurstCount += 1
+        }
+
+        if (enemy.stats.pushBombOnAttack) {
+            const dir = new Phaser.Math.Vector2(
+                this.captain.sprite.x - enemy.sprite.x,
+                this.captain.sprite.y - enemy.sprite.y
+            )
+            if (dir.lengthSq() > 0) {
+                dir.normalize()
+                bomb.body?.setVelocity(dir.x * BOMB_KICK_SPEED, dir.y * BOMB_KICK_SPEED)
+            }
+        }
     }
 
     findNearestBomb(x, y, maxDistance) {
@@ -1231,6 +1368,7 @@ export default class GameScene extends Scene {
         const fuseBeats = Phaser.Utils.Array.GetRandom(BOMB_FUSE_BEATS)
         const offDelayMs = Math.max(0, fuseBeats - 1) * SECONDS_PER_BEAT * 1000
         const bomb = this.physics.add.sprite(feetX, feetY, 'pirate-bomb', 0)
+        const bombId = this.nextBombId++
 
         bomb.setOrigin(0.5, 1)
         bomb.setScale(0.5)
@@ -1242,6 +1380,7 @@ export default class GameScene extends Scene {
         bomb.body.setMaxVelocity(BOMB_KICK_SPEED, BOMB_KICK_SPEED)
         bomb.setData('ownerType', owner.type)
         bomb.setData('ownerId', owner.id ?? null)
+        bomb.setData('bombId', bombId)
         this.bombs.add(bomb)
 
         this.physics.add.collider(bomb, manager.getWallGroup(this, 'default_map'))
@@ -1277,12 +1416,17 @@ export default class GameScene extends Scene {
                         const owner = this.enemies.find(enemy => enemy.id === ownerId)
                         if (owner && owner.alive) {
                             owner.bombCount = Math.min(owner.stats.maxBombs, owner.bombCount + 1)
+                            if (owner.stats.wave === 4 && bomb.getData('bombId') === owner.bossFirstBombId) {
+                                owner.bossBurstCount = 0
+                                owner.bossFirstBombId = null
+                            }
                         }
                     }
                     this.bombs.remove(bomb, true, true)
                 })
             })
         })
+        return bomb
     }
 
     safeRestartScene() {
@@ -1313,11 +1457,14 @@ export default class GameScene extends Scene {
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.nextEnemyId = 1
+        this.nextBombId = 1
         this.currentWave = 1
         this.wave2SpawnScheduled = false
         this.wave2SpawnTimer = null
         this.wave3SpawnScheduled = false
         this.wave3SpawnTimer = null
+        this.bossSpawnScheduled = false
+        this.bossSpawnTimer = null
 
         this.captain.sprite.removeAllListeners()
         this.captain.sprite.setActive(true)
@@ -1330,6 +1477,7 @@ export default class GameScene extends Scene {
         this.captain.sprite.anims.pause()
 
         this.gameOverText?.setVisible(false)
+        this.gameOverText?.setText('GAME OVER')
         this.hud?.setText(`HP: ${this.hp}`)
 
         if (this.startButton) {
@@ -1387,6 +1535,15 @@ export default class GameScene extends Scene {
         }
 
         return null
+    }
+
+    isBombActiveById(bombId) {
+        if (!bombId) {
+            return false
+        }
+
+        const bombs = this.bombs?.getChildren?.() ?? []
+        return bombs.some(bomb => bomb.active && bomb.getData('bombId') === bombId)
     }
 
     findBombAtCells(cells) {
@@ -1572,6 +1729,10 @@ export default class GameScene extends Scene {
             enemy.sprite.destroy()
             this.tryScheduleWaveTwoSpawn()
             this.tryScheduleWaveThreeSpawn()
+            this.tryScheduleBossSpawn()
+            if (enemy.stats.wave === 4) {
+                this.triggerVictory()
+            }
         })
     }
 
@@ -1619,12 +1780,45 @@ export default class GameScene extends Scene {
         })
     }
 
+    tryScheduleBossSpawn() {
+        if (this.bossSpawnScheduled || this.currentWave !== 3 || this.isGameOver) {
+            return
+        }
+
+        const wave3StillPresent = this.enemies.some(enemy =>
+            enemy.stats.wave === 3 &&
+            (enemy.alive || enemy.sprite?.active)
+        )
+        if (wave3StillPresent) {
+            return
+        }
+
+        this.bossSpawnScheduled = true
+        this.bossSpawnTimer = this.time.delayedCall(BOSS_SPAWN_DELAY_MS, () => {
+            if (this.isGameOver || this.isRestarting) {
+                return
+            }
+            this.spawnBoss()
+        })
+    }
+
     triggerGameOver() {
         this.isGameOver = true
         this.isCaptainHit = false
         this.isCaptainJumping = false
         this.captain.sprite.setVelocity(0, 0)
         this.captain.sprite.play('captain-dead-ground', true)
+        this.gameOverText?.setVisible(true)
+    }
+
+    triggerVictory() {
+        this.isGameOver = true
+        this.isCaptainHit = false
+        this.isCaptainJumping = false
+        this.captain.sprite.setVelocity(0, 0)
+        this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
+        this.backgroundMusic?.stop()
+        this.gameOverText?.setText('You survive')
         this.gameOverText?.setVisible(true)
     }
 
