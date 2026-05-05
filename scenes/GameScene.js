@@ -10,6 +10,7 @@ const SECONDS_PER_BEAT = 60 / MUSIC_BPM
 const MOVE_FRAME_RATE = 6 / SECONDS_PER_BEAT
 const IDLE_FRAME_RATE = 5 / SECONDS_PER_BEAT
 const HIT_FRAME_RATE = 4 / SECONDS_PER_BEAT
+const JUMP_FRAME_RATE = 3 / SECONDS_PER_BEAT
 const BOMB_FRAME_WIDTH = 96
 const BOMB_FRAME_HEIGHT = 108
 const BOMB_TICK_FRAME_RATE = 10 / SECONDS_PER_BEAT
@@ -17,6 +18,8 @@ const BOMB_EXPLOSION_FRAME_RATE = 9 / SECONDS_PER_BEAT
 const BOMB_FUSE_BEATS = [1, 2, 3]
 const BOMB_DROP_COOLDOWN_MS = SECONDS_PER_BEAT * 250
 const CAPTAIN_HIT_RADIUS = TILE_SIZE * 1.5
+const BOMB_KICK_SPEED = TILE_SIZE * 9
+const BOMB_KICK_DRAG = TILE_SIZE * 11
 
 export default class GameScene extends Scene {
     constructor() {
@@ -31,6 +34,7 @@ export default class GameScene extends Scene {
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.isCaptainHit = false
+        this.isCaptainJumping = false
         this.mapFurnitureSprites = []
         this.spaceKey = null
     }
@@ -47,6 +51,9 @@ export default class GameScene extends Scene {
             frameWidth: makiConfig.player.frameWidth,
             frameHeight: makiConfig.player.frameHeight
         })
+        this.load.image('captain-jump-1', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/03-Jump/Jump 01.png')
+        this.load.image('captain-jump-2', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/03-Jump/Jump 02.png')
+        this.load.image('captain-jump-3', 'sprites/Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose without Sword/03-Jump/Jump 03.png')
         this.load.spritesheet('pirate-bomb', 'sprites/pirate-bomb-spritesheet.png', {
             frameWidth: BOMB_FRAME_WIDTH,
             frameHeight: BOMB_FRAME_HEIGHT
@@ -84,6 +91,7 @@ export default class GameScene extends Scene {
         this.configureMoveAnimationTempo()
         this.createIdleAnimations()
         this.createHitAnimation()
+        this.createJumpAnimation()
         this.createBombAnimations()
         this.captain.sprite.play('captain-idle-right')
         this.setupBackgroundMusic()
@@ -122,8 +130,10 @@ export default class GameScene extends Scene {
             return
         }
 
+        this.reconcileCaptainActionState()
         this.moveCaptain()
         this.updateSceneDepths()
+        this.updateBombDepths()
         this.handleBombInput()
 
         const { x, y } = this.captain.sprite
@@ -169,6 +179,10 @@ export default class GameScene extends Scene {
             sprite.setVelocity(0)
             return
         }
+        if (this.isCaptainJumping) {
+            sprite.setVelocity(0)
+            return
+        }
 
         const horizontal = (keys.right.isDown ? 1 : 0) - (keys.left.isDown ? 1 : 0)
         const vertical = (keys.down.isDown ? 1 : 0) - (keys.up.isDown ? 1 : 0)
@@ -206,13 +220,23 @@ export default class GameScene extends Scene {
             return
         }
 
+        const feet = this.getCaptainFeetCell()
+        const kickDirection = this.getKickDirection()
+        const probeCells = this.getBombProbeCells(kickDirection, feet)
+        const bombAtCell = this.findBombAtCells(probeCells)
+
+        if (bombAtCell) {
+            this.kickBomb(bombAtCell, kickDirection)
+            return
+        }
+
         const now = this.time.now
         if (now - this.lastBombDropAt < BOMB_DROP_COOLDOWN_MS) {
             return
         }
 
         this.lastBombDropAt = now
-        this.dropBomb()
+        this.dropBomb(feet.x, feet.y)
     }
 
     createIdleAnimations() {
@@ -241,6 +265,21 @@ export default class GameScene extends Scene {
                 key: 'captain-hit',
                 frames: this.anims.generateFrameNumbers('captain-hit', { start: 0, end: 3 }),
                 frameRate: HIT_FRAME_RATE,
+                repeat: 0
+            })
+        }
+    }
+
+    createJumpAnimation() {
+        if (!this.anims.exists('captain-jump')) {
+            this.anims.create({
+                key: 'captain-jump',
+                frames: [
+                    { key: 'captain-jump-1' },
+                    { key: 'captain-jump-2' },
+                    { key: 'captain-jump-3' }
+                ],
+                frameRate: JUMP_FRAME_RATE,
                 repeat: 0
             })
         }
@@ -291,6 +330,16 @@ export default class GameScene extends Scene {
 
         const captainDepth = this.captain.sprite.body?.bottom ?? this.captain.sprite.y
         this.captain.sprite.setDepth(captainDepth)
+    }
+
+    updateBombDepths() {
+        const bombs = this.bombs?.getChildren?.() ?? []
+        for (const bomb of bombs) {
+            if (!bomb.active) {
+                continue
+            }
+            bomb.setDepth(bomb.y + 12)
+        }
     }
 
     createStartButton() {
@@ -346,6 +395,7 @@ export default class GameScene extends Scene {
     resetRunState() {
         this.isGameStarted = false
         this.isCaptainHit = false
+        this.isCaptainJumping = false
         this.lastHorizontalDirection = 'right'
         this.lastBombDropAt = 0
         this.startButton = null
@@ -442,16 +492,22 @@ export default class GameScene extends Scene {
         }
     }
 
-    dropBomb() {
-        const worldX = Phaser.Math.Snap.To(this.captain.sprite.x, TILE_SIZE)
-        const worldY = Phaser.Math.Snap.To(this.captain.sprite.y, TILE_SIZE)
+    dropBomb(feetX, feetY) {
         const fuseBeats = Phaser.Utils.Array.GetRandom(BOMB_FUSE_BEATS)
         const offDelayMs = Math.max(0, fuseBeats - 1) * SECONDS_PER_BEAT * 1000
-        const bomb = this.add.sprite(worldX, worldY + 10, 'pirate-bomb', 0)
+        const bomb = this.physics.add.sprite(feetX, feetY, 'pirate-bomb', 0)
 
+        bomb.setOrigin(0.5, 1)
         bomb.setScale(0.5)
-        bomb.setDepth(worldY + 12)
+        bomb.setDepth(feetY + 12)
+        bomb.setCollideWorldBounds(true)
+        bomb.body.setAllowGravity(false)
+        bomb.body.setDrag(BOMB_KICK_DRAG, BOMB_KICK_DRAG)
+        bomb.body.setBounce(0.1, 0.1)
+        bomb.body.setMaxVelocity(BOMB_KICK_SPEED, BOMB_KICK_SPEED)
         this.bombs.add(bomb)
+
+        this.physics.add.collider(bomb, manager.getWallGroup(this, 'default_map'))
 
         this.time.delayedCall(offDelayMs, () => {
             if (!bomb.active) {
@@ -467,10 +523,121 @@ export default class GameScene extends Scene {
                 this.handleCaptainBombHit(bomb.x, bomb.y)
                 bomb.play('pirate-bomb-explosion')
                 bomb.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+                    bomb.body?.setVelocity(0, 0)
                     this.bombs.remove(bomb, true, true)
                 })
             })
         })
+    }
+
+    findBombAtCell(cellX, cellY) {
+        const bombs = this.bombs?.getChildren?.() ?? []
+        for (const bomb of bombs) {
+            if (!bomb.active) {
+                continue
+            }
+
+            const bombCellX = Phaser.Math.Snap.To(bomb.x, TILE_SIZE)
+            const bombCellY = Phaser.Math.Snap.To(bomb.y, TILE_SIZE)
+            if (bombCellX === cellX && bombCellY === cellY) {
+                return bomb
+            }
+        }
+
+        return null
+    }
+
+    findBombAtCells(cells) {
+        for (const cell of cells) {
+            const bomb = this.findBombAtCell(cell.x, cell.y)
+            if (bomb) {
+                return bomb
+            }
+        }
+
+        return null
+    }
+
+    kickBomb(bomb, direction) {
+        bomb.body?.setVelocity(direction.x * BOMB_KICK_SPEED, direction.y * BOMB_KICK_SPEED)
+        this.playCaptainJumpForKick(direction.x)
+    }
+
+    getKickDirection() {
+        const { keys } = this.captain
+        const horizontal = (keys.right.isDown ? 1 : 0) - (keys.left.isDown ? 1 : 0)
+        const vertical = (keys.down.isDown ? 1 : 0) - (keys.up.isDown ? 1 : 0)
+
+        if (horizontal !== 0 || vertical !== 0) {
+            return new Phaser.Math.Vector2(horizontal, vertical).normalize()
+        }
+
+        return this.lastHorizontalDirection === 'left'
+            ? new Phaser.Math.Vector2(-1, 0)
+            : new Phaser.Math.Vector2(1, 0)
+    }
+
+    getBombProbeCells(direction, feetCell) {
+        const probes = [{ x: feetCell.x, y: feetCell.y }]
+        const body = this.captain.sprite.body
+
+        if (!body) {
+            return probes
+        }
+
+        if (direction.y < 0) {
+            const topY = Phaser.Math.Snap.To(body.top, TILE_SIZE)
+            const topCenterX = Phaser.Math.Snap.To(body.center.x, TILE_SIZE)
+            probes.push({ x: topCenterX, y: topY })
+
+            if (direction.x < 0) {
+                const topLeftX = Phaser.Math.Snap.To(body.left + 2, TILE_SIZE)
+                probes.push({ x: topLeftX, y: topY })
+            } else if (direction.x > 0) {
+                const topRightX = Phaser.Math.Snap.To(body.right - 2, TILE_SIZE)
+                probes.push({ x: topRightX, y: topY })
+            }
+        }
+
+        return probes
+    }
+
+    getCaptainFeetCell() {
+        const body = this.captain.sprite.body
+        const feetX = body?.center?.x ?? this.captain.sprite.x
+        const feetY = body?.bottom ?? this.captain.sprite.y
+
+        return {
+            x: Phaser.Math.Snap.To(feetX, TILE_SIZE),
+            y: Phaser.Math.Snap.To(feetY, TILE_SIZE)
+        }
+    }
+
+    playCaptainJumpForKick(horizontalDirection) {
+        if (this.isCaptainHit || this.isCaptainJumping) {
+            return
+        }
+
+        this.isCaptainJumping = true
+        this.captain.sprite.setVelocity(0, 0)
+        this.captain.sprite.setFlipX(horizontalDirection < 0)
+        this.captain.sprite.play('captain-jump', true)
+        this.captain.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, animation => {
+            if (animation.key !== 'captain-jump') {
+                return
+            }
+
+            this.isCaptainJumping = false
+            this.captain.sprite.setFlipX(false)
+            this.captain.sprite.play(`captain-idle-${this.lastHorizontalDirection}`, true)
+        })
+    }
+
+    reconcileCaptainActionState() {
+        const currentAnimKey = this.captain?.sprite?.anims?.currentAnim?.key
+        if (this.isCaptainJumping && currentAnimKey !== 'captain-jump') {
+            this.isCaptainJumping = false
+        }
     }
 
     handleCaptainBombHit(explosionX, explosionY) {
@@ -489,6 +656,7 @@ export default class GameScene extends Scene {
             return
         }
 
+        this.isCaptainJumping = false
         this.isCaptainHit = true
         this.captain.sprite.setVelocity(0)
         this.captain.sprite.setFlipX(this.lastHorizontalDirection === 'left')
