@@ -24,6 +24,7 @@ const CAPTAIN_HIT_CAMERA_SHAKE_INTENSITY = 0.004
 const BOMB_KICK_RANGE = 1
 const BOMB_KICK_SPEED = TILE_SIZE * 9 * BOMB_KICK_RANGE
 const BOMB_KICK_DRAG = TILE_SIZE * 11
+const PLAYER_MAX_HP = 99
 const PLAYER_MAX_BOMBS = 5
 const ENEMY1_COUNT_WAVE_1 = 2
 const ENEMY1_CHASE_SPEED = 120
@@ -104,7 +105,7 @@ export default class GameScene extends Scene {
         this.replayButton = null
         this.isGameStarted = false
         this.isGameOver = false
-        this.hp = 99
+        this.hp = PLAYER_MAX_HP
         this.bombCount = PLAYER_MAX_BOMBS
         this.isRestarting = false
         this.lastHorizontalDirection = 'right'
@@ -129,10 +130,12 @@ export default class GameScene extends Scene {
         this.touchBombQueued = false
         this.touchActionButton = null
         this.touchActionButtonBg = null
+        this.loadingOverlay = null
     }
 
     preload() {
         super.preload()
+        this.createLoadingOverlay()
 
         this.captain = this.maki.player('captain')
         this.load.spritesheet('captain-idle', 'sprites/captain-clown-idle.png', {
@@ -180,6 +183,60 @@ export default class GameScene extends Scene {
         this.load.audio('enemy-hit-fart', 'audios/apebble-fart-4-228244.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
+    }
+
+    createLoadingOverlay() {
+        const width = this.scale.width
+        const height = this.scale.height
+        const boxWidth = Math.min(420, Math.floor(width * 0.72))
+        const boxHeight = 24
+        const x = Math.floor((width - boxWidth) / 2)
+        const y = Math.floor(height * 0.5)
+
+        const background = this.add.rectangle(width / 2, height / 2, width, height, 0x102014, 0.92)
+        background.setScrollFactor(0)
+        background.setDepth(5000)
+
+        const barBg = this.add.rectangle(x + boxWidth / 2, y, boxWidth, boxHeight, 0x203d2a, 1)
+        barBg.setStrokeStyle(2, 0x9bcf7a, 1)
+        barBg.setScrollFactor(0)
+        barBg.setDepth(5001)
+
+        const barFill = this.add.rectangle(x + 2, y, 0, boxHeight - 4, 0x9bcf7a, 1)
+        barFill.setOrigin(0, 0.5)
+        barFill.setScrollFactor(0)
+        barFill.setDepth(5002)
+
+        const label = this.add.text(width / 2, y - 36, 'Loading 0%', {
+            fontFamily: 'monospace',
+            fontSize: '26px',
+            color: '#fff7d6'
+        })
+        label.setOrigin(0.5)
+        label.setScrollFactor(0)
+        label.setDepth(5003)
+
+        this.loadingOverlay = { background, barBg, barFill, label, boxWidth }
+
+        this.load.on('progress', value => {
+            if (!this.loadingOverlay) {
+                return
+            }
+            const clamped = Phaser.Math.Clamp(value, 0, 1)
+            this.loadingOverlay.barFill.width = (boxWidth - 4) * clamped
+            this.loadingOverlay.label.setText(`Loading ${Math.round(clamped * 100)}%`)
+        })
+
+        this.load.once('complete', () => {
+            if (!this.loadingOverlay) {
+                return
+            }
+            this.loadingOverlay.background.destroy()
+            this.loadingOverlay.barBg.destroy()
+            this.loadingOverlay.barFill.destroy()
+            this.loadingOverlay.label.destroy()
+            this.loadingOverlay = null
+        })
     }
 
     create() {
@@ -714,6 +771,7 @@ export default class GameScene extends Scene {
 
     spawnWaveTwoEnemies() {
         this.currentWave = 2
+        this.restoreHpForNewWave()
         this.wave2SpawnScheduled = false
         this.wave2SpawnTimer = null
         this.wave3SpawnScheduled = false
@@ -727,6 +785,7 @@ export default class GameScene extends Scene {
 
     spawnWaveThreeEnemies() {
         this.currentWave = 3
+        this.restoreHpForNewWave()
         this.wave3SpawnScheduled = false
         this.wave3SpawnTimer = null
         this.bossSpawnScheduled = false
@@ -738,6 +797,7 @@ export default class GameScene extends Scene {
 
     spawnBoss() {
         this.currentWave = 4
+        this.restoreHpForNewWave()
         this.bossSpawnScheduled = false
         this.bossSpawnTimer = null
         for (let i = 0; i < BOSS_COUNT; i += 1) {
@@ -1572,7 +1632,7 @@ export default class GameScene extends Scene {
 
         this.isGameStarted = false
         this.isGameOver = false
-        this.hp = 99
+        this.hp = PLAYER_MAX_HP
         this.bombCount = PLAYER_MAX_BOMBS
         this.isCaptainHit = false
         this.isCaptainJumping = false
@@ -1618,6 +1678,13 @@ export default class GameScene extends Scene {
 
         this.spawnWaveOneEnemies()
         this.isRestarting = false
+    }
+
+    restoreHpForNewWave() {
+        if (this.hp >= PLAYER_MAX_HP) {
+            return
+        }
+        this.hp = Math.min(PLAYER_MAX_HP, this.hp + 33)
     }
 
     cleanupBombs() {
