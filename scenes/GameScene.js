@@ -94,6 +94,7 @@ export default class GameScene extends Scene {
     constructor() {
         super('GameScene')
         this.backgroundMusic = null
+        this.playerHitSound = null
         this.bombs = null
         this.captain = null
         this.hud = null
@@ -167,6 +168,7 @@ export default class GameScene extends Scene {
         this.preloadEnemyFrames('boss-hit', 'sprites/Pirate Bomb/Sprites/5-Enemy-Captain/9-Hit', 8)
         this.preloadEnemyFrames('boss-dead-ground', 'sprites/Pirate Bomb/Sprites/5-Enemy-Captain/11-Dead Ground', 4)
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
+        this.load.audio('player-hit-fart', 'audios/freesound_community-fart-83471.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
     }
@@ -203,6 +205,7 @@ export default class GameScene extends Scene {
         this.createEnemyAnimations()
         this.captain.sprite.play('captain-idle-right')
         this.setupBackgroundMusic()
+        this.setupPlayerHitSound()
         this.setupEnemyCollisionGrid('default_map')
         this.spawnWaveOneEnemies()
 
@@ -1658,6 +1661,7 @@ export default class GameScene extends Scene {
         }
 
         this.hp = Math.max(0, this.hp - 33)
+        this.playPlayerHitSound()
         this.cameras.main.shake(CAPTAIN_HIT_CAMERA_SHAKE_MS, CAPTAIN_HIT_CAMERA_SHAKE_INTENSITY)
         if (this.hp === 0) {
             this.triggerGameOver()
@@ -1840,6 +1844,28 @@ export default class GameScene extends Scene {
                 this.backgroundMusic.stop()
             }
         })
+    }
+
+    setupPlayerHitSound() {
+        if (!this.cache.audio.exists('player-hit-fart')) {
+            this.playerHitSound = null
+            return
+        }
+
+        this.playerHitSound = this.sound.get('player-hit-fart') ?? this.sound.add('player-hit-fart', {
+            volume: 0.55
+        })
+    }
+
+    playPlayerHitSound() {
+        if (!this.playerHitSound) {
+            return
+        }
+
+        if (this.playerHitSound.isPlaying) {
+            this.playerHitSound.stop()
+        }
+        this.playerHitSound.play()
     }
 
     startBackgroundMusic() {
