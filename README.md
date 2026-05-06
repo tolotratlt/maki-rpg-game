@@ -1,4 +1,4 @@
-# Captain bomb & kick
+# Bomb Panic
 
 A small 2D pixel RPG prototype built with `@tialops/maki`.
 
