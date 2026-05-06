@@ -395,6 +395,10 @@ export default class GameScene extends Scene {
     setupTouchControls() {
         this.input.on('pointerdown', pointer => {
             if (pointer.primaryDown && this.isPointerInsideTouchActionButton(pointer)) {
+                if (pointer.id === this.touchMovePointerId) {
+                    this.touchMovePointerId = null
+                    this.touchMoveTarget = null
+                }
                 return
             }
 
@@ -439,6 +443,8 @@ export default class GameScene extends Scene {
         this.touchActionButton.on('pointerup', () => {
             this.touchBombQueued = true
             this.touchActionButton.setTexture('bomb-button')
+            this.touchMovePointerId = null
+            this.touchMoveTarget = null
         })
         this.touchActionButton.on('pointerdown', () => {
             this.touchActionButton.setTexture('bomb-button-hover')
@@ -449,11 +455,11 @@ export default class GameScene extends Scene {
     }
 
     isPointerInsideTouchActionButton(pointer) {
-        if (!this.touchActionButton) {
+        if (!this.touchActionButton || !this.touchActionButton.visible || !this.touchActionButton.input?.enabled) {
             return false
         }
-        const bounds = this.touchActionButton.getBounds()
-        return bounds.contains(pointer.x, pointer.y)
+        const hits = this.input.manager.hitTest(pointer, [this.touchActionButton], this.cameras.main)
+        return hits.length > 0
     }
 
     getPointerWorldPosition(pointer) {
