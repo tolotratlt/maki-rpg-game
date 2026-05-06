@@ -155,14 +155,31 @@ function mapEditorApiPlugin() {
     }
 }
 
-export default defineConfig({
-    publicDir: 'assets',
-    plugins: [mapEditorApiPlugin()],
-    build: {
-        rollupOptions: {
-            input: {
-                main: path.join(workspaceRoot, 'index.html'),
-                mapEditor: path.join(workspaceRoot, 'map-editor.html')
+export default defineConfig(({ mode }) => {
+    const isItchioBuild = mode === 'itchio'
+
+    return {
+        base: isItchioBuild ? './' : '/',
+        publicDir: isItchioBuild ? 'assets-itchio' : 'assets',
+        plugins: [mapEditorApiPlugin()],
+        build: {
+            assetsDir: isItchioBuild ? '.' : 'assets',
+            rollupOptions: {
+                output: isItchioBuild
+                    ? {
+                        entryFileNames: 'game.js',
+                        chunkFileNames: 'chunk-[name].js',
+                        assetFileNames: 'asset-[name][extname]'
+                    }
+                    : undefined,
+                input: isItchioBuild
+                    ? {
+                        main: path.join(workspaceRoot, 'index.html')
+                    }
+                    : {
+                        main: path.join(workspaceRoot, 'index.html'),
+                        mapEditor: path.join(workspaceRoot, 'map-editor.html')
+                    }
             }
         }
     }

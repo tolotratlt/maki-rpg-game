@@ -12,6 +12,10 @@
     "watch": "vite --host 127.0.0.1 --open",
     "build": "vite build",
     "build:dist": "vite build --outDir dist",
+    "prepare:itchio-assets": "node scripts/prepare-itchio-assets.mjs",
+    "build:dist:itchio": "npm run prepare:itchio-assets && powershell -Command \"Remove-Item -Recurse -Force dist-itchio -ErrorAction SilentlyContinue\" && vite build --mode itchio --base ./ --outDir dist-itchio",
+    "zip:dist:itchio": "node scripts/zip-itchio-dist.mjs",
+    "build:zip:itchio": "npm run build:dist:itchio && npm run zip:dist:itchio",
     "preview": "vite preview",
     "postinstall": "node scripts/patch-maki-tilemap-editor.mjs"
   },
