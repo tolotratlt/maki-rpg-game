@@ -95,6 +95,7 @@ export default class GameScene extends Scene {
         super('GameScene')
         this.backgroundMusic = null
         this.playerHitSound = null
+        this.enemyHitSound = null
         this.bombs = null
         this.captain = null
         this.hud = null
@@ -169,6 +170,7 @@ export default class GameScene extends Scene {
         this.preloadEnemyFrames('boss-dead-ground', 'sprites/Pirate Bomb/Sprites/5-Enemy-Captain/11-Dead Ground', 4)
         this.load.audio('battle-theme', 'audios/24-battle-theme-4.mp3')
         this.load.audio('player-hit-fart', 'audios/freesound_community-fart-83471.mp3')
+        this.load.audio('enemy-hit-fart', 'audios/apebble-fart-4-228244.mp3')
         manager.map(this, 'default_map')
         manager.preload(this)
     }
@@ -206,6 +208,7 @@ export default class GameScene extends Scene {
         this.captain.sprite.play('captain-idle-right')
         this.setupBackgroundMusic()
         this.setupPlayerHitSound()
+        this.setupEnemyHitSound()
         this.setupEnemyCollisionGrid('default_map')
         this.spawnWaveOneEnemies()
 
@@ -1701,6 +1704,7 @@ export default class GameScene extends Scene {
             }
 
             enemy.hp -= 1
+            this.playEnemyHitSound()
             if (enemy.hp <= 0) {
                 this.killEnemy(enemy)
                 continue
@@ -1866,6 +1870,28 @@ export default class GameScene extends Scene {
             this.playerHitSound.stop()
         }
         this.playerHitSound.play()
+    }
+
+    setupEnemyHitSound() {
+        if (!this.cache.audio.exists('enemy-hit-fart')) {
+            this.enemyHitSound = null
+            return
+        }
+
+        this.enemyHitSound = this.sound.get('enemy-hit-fart') ?? this.sound.add('enemy-hit-fart', {
+            volume: 0.55
+        })
+    }
+
+    playEnemyHitSound() {
+        if (!this.enemyHitSound) {
+            return
+        }
+
+        if (this.enemyHitSound.isPlaying) {
+            this.enemyHitSound.stop()
+        }
+        this.enemyHitSound.play()
     }
 
     startBackgroundMusic() {
