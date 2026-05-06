@@ -124,6 +124,11 @@ export default class GameScene extends Scene {
         this.bossSpawnScheduled = false
         this.bossSpawnTimer = null
         this.nextBombId = 1
+        this.touchMovePointerId = null
+        this.touchMoveTarget = null
+        this.touchBombQueued = false
+        this.touchActionButton = null
+        this.touchActionButtonBg = null
     }
 
     preload() {
@@ -152,6 +157,8 @@ export default class GameScene extends Scene {
         this.load.image('play-button', 'sprites/ui/play2x-1.png')
         this.load.image('replay-button', 'sprites/ui/repeat.png')
         this.load.image('replay-button-hover', 'sprites/ui/repeat-hover.png')
+        this.load.image('bomb-button', 'sprites/ui/bomb.png')
+        this.load.image('bomb-button-hover', 'sprites/ui/bomb-hover.png')
         this.preloadEnemyFrames('enemy-idle', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/1-Idle', 34)
         this.preloadEnemyFrames('enemy-run', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/2-Run', 14)
         this.preloadEnemyFrames('enemy-hit', 'sprites/Pirate Bomb/Sprites/2-Enemy-Bald Pirate/8-Hit', 8)
@@ -245,6 +252,7 @@ export default class GameScene extends Scene {
         this.gameOverText.setVisible(false)
         this.createStartButton()
         this.createReplayButton()
+        this.setupTouchControls()
     }
 
     update() {
@@ -314,37 +322,50 @@ export default class GameScene extends Scene {
 
         const horizontal = (keys.right.isDown ? 1 : 0) - (keys.left.isDown ? 1 : 0)
         const vertical = (keys.down.isDown ? 1 : 0) - (keys.up.isDown ? 1 : 0)
+        const keyboardVector = new Phaser.Math.Vector2(horizontal, vertical)
+        const touchVector = this.getTouchMoveVector()
+        const moveVector = keyboardVector.lengthSq() > 0 ? keyboardVector.normalize() : touchVector
 
         sprite.setFlipX(false)
         sprite.setVelocity(0)
 
-        if (horizontal === 0 && vertical === 0) {
+        if (moveVector.lengthSq() === 0) {
             sprite.anims.play(`captain-idle-${this.lastHorizontalDirection}`, true)
             return
         }
 
-        const direction = new Phaser.Math.Vector2(horizontal, vertical).normalize().scale(speed)
+        const direction = moveVector.clone().scale(speed)
         sprite.setVelocity(direction.x, direction.y)
 
-        if (horizontal < 0) {
+        if (direction.x < -0.12) {
             this.lastHorizontalDirection = 'left'
             sprite.anims.play('captain-left', true)
             return
         }
 
-        if (horizontal > 0) {
+        if (direction.x > 0.12) {
             this.lastHorizontalDirection = 'right'
             sprite.anims.play('captain-right', true)
             return
         }
 
-        if (vertical !== 0) {
+        if (Math.abs(direction.y) > 0.05) {
             sprite.anims.play(`captain-${this.lastHorizontalDirection}`, true)
         }
     }
 
     handleBombInput() {
-        if (!this.spaceKey || !Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+        const keyboardTriggered = Boolean(this.spaceKey && Phaser.Input.Keyboard.JustDown(this.spaceKey))
+        const touchTriggered = this.touchBombQueued === true
+        if (!keyboardTriggered && !touchTriggered) {
+            return
+        }
+        this.touchBombQueued = false
+        this.tryBombAction()
+    }
+
+    tryBombAction() {
+        if (this.isGameOver || !this.isGameStarted || !this.captain?.sprite) {
             return
         }
 
@@ -369,6 +390,93 @@ export default class GameScene extends Scene {
         this.lastBombDropAt = now
         this.bombCount -= 1
         this.dropBomb(feet.x, feet.y)
+    }
+
+    setupTouchControls() {
+        this.input.on('pointerdown', pointer => {
+            if (pointer.primaryDown && this.isPointerInsideTouchActionButton(pointer)) {
+                return
+            }
+
+            if (this.touchMovePointerId !== null) {
+                return
+            }
+
+            this.touchMovePointerId = pointer.id
+            this.touchMoveTarget = this.getPointerWorldPosition(pointer)
+        })
+
+        this.input.on('pointermove', pointer => {
+            if (pointer.id !== this.touchMovePointerId) {
+                return
+            }
+            this.touchMoveTarget = this.getPointerWorldPosition(pointer)
+        })
+
+        const releaseTouchMove = pointer => {
+            if (pointer.id !== this.touchMovePointerId) {
+                return
+            }
+            this.touchMovePointerId = null
+            this.touchMoveTarget = null
+        }
+
+        this.input.on('pointerup', releaseTouchMove)
+        this.input.on('pointerupoutside', releaseTouchMove)
+
+        this.touchActionButton = this.add.image(this.scale.width / 2 - 200, this.scale.height / 2 + 145, 'bomb-button')
+        this.touchActionButton.setOrigin(0.5, 0.5)
+        this.touchActionButton.setScale(0.5)
+        this.touchActionButton.setScrollFactor(0)
+        this.touchActionButton.setDepth(210)
+        this.touchActionButton.setInteractive({ useHandCursor: true })
+        this.touchActionButton.on('pointerover', () => {
+            this.touchActionButton.setTexture('bomb-button-hover')
+        })
+        this.touchActionButton.on('pointerout', () => {
+            this.touchActionButton.setTexture('bomb-button')
+        })
+        this.touchActionButton.on('pointerup', () => {
+            this.touchBombQueued = true
+            this.touchActionButton.setTexture('bomb-button')
+        })
+        this.touchActionButton.on('pointerdown', () => {
+            this.touchActionButton.setTexture('bomb-button-hover')
+        })
+        this.touchActionButton.on('pointerupoutside', () => {
+            this.touchActionButton.setTexture('bomb-button')
+        })
+    }
+
+    isPointerInsideTouchActionButton(pointer) {
+        if (!this.touchActionButton) {
+            return false
+        }
+        const bounds = this.touchActionButton.getBounds()
+        return bounds.contains(pointer.x, pointer.y)
+    }
+
+    getPointerWorldPosition(pointer) {
+        const cameraPoint = pointer.positionToCamera(this.cameras.main)
+        if (!cameraPoint) {
+            return { x: pointer.worldX, y: pointer.worldY }
+        }
+        return { x: cameraPoint.x, y: cameraPoint.y }
+    }
+
+    getTouchMoveVector() {
+        if (!this.isGameStarted || this.isGameOver || this.touchMovePointerId === null || !this.touchMoveTarget || !this.captain?.sprite) {
+            return new Phaser.Math.Vector2(0, 0)
+        }
+
+        const delta = new Phaser.Math.Vector2(
+            this.touchMoveTarget.x - this.captain.sprite.x,
+            this.touchMoveTarget.y - this.captain.sprite.y
+        )
+        if (delta.length() < 12) {
+            return new Phaser.Math.Vector2(0, 0)
+        }
+        return delta.normalize()
     }
 
     createIdleAnimations() {
