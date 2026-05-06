@@ -295,7 +295,7 @@ export default class GameScene extends Scene {
         this.hud.setPosition(this.scale.width / 2, this.scale.height / 2 + 120)
         this.hud.setScrollFactor(0)
         this.hud.setDepth(210)
-        this.hud.setText(`HP: ${this.hp}`)
+        this.updateHud()
         this.gameOverText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'GAME OVER', {
             fontFamily: 'monospace',
             fontSize: '40px',
@@ -318,12 +318,12 @@ export default class GameScene extends Scene {
         }
 
         if (!this.isGameStarted) {
-            this.hud.setText(`HP: ${this.hp}`)
+            this.updateHud()
             return
         }
 
         if (this.isGameOver) {
-            this.hud.setText(`HP: ${this.hp}\nWave ${this.currentWave}`)
+            this.updateHud()
             return
         }
 
@@ -334,7 +334,19 @@ export default class GameScene extends Scene {
         this.updateEnemies()
         this.handleBombInput()
 
-        this.hud.setText(`HP: ${this.hp}\nWave ${this.currentWave}`)
+        this.updateHud()
+    }
+
+    getAliveEnemyCount() {
+        return this.enemies.filter(enemy => enemy.alive && !enemy.isDead && enemy.sprite?.active).length
+    }
+
+    updateHud() {
+        if (!this.hud) {
+            return
+        }
+        const enemyCount = this.getAliveEnemyCount()
+        this.hud.setText(`HP: ${this.hp}\nWave ${this.currentWave}  Enemies ${enemyCount}`)
     }
 
     _getConfig() {
