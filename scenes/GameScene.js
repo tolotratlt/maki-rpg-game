@@ -19,6 +19,8 @@ const BOMB_EXPLOSION_FRAME_RATE = 9 / SECONDS_PER_BEAT
 const BOMB_FUSE_BEATS = [1.5, 2, 3]
 const BOMB_DROP_COOLDOWN_MS = SECONDS_PER_BEAT * 250
 const CAPTAIN_HIT_RADIUS = TILE_SIZE * 1.5
+const CAPTAIN_HIT_CAMERA_SHAKE_MS = 120
+const CAPTAIN_HIT_CAMERA_SHAKE_INTENSITY = 0.004
 const BOMB_KICK_RANGE = 1
 const BOMB_KICK_SPEED = TILE_SIZE * 9 * BOMB_KICK_RANGE
 const BOMB_KICK_DRAG = TILE_SIZE * 11
@@ -1656,6 +1658,7 @@ export default class GameScene extends Scene {
         }
 
         this.hp = Math.max(0, this.hp - 33)
+        this.cameras.main.shake(CAPTAIN_HIT_CAMERA_SHAKE_MS, CAPTAIN_HIT_CAMERA_SHAKE_INTENSITY)
         if (this.hp === 0) {
             this.triggerGameOver()
             return
